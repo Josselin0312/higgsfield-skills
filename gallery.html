@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Higgsfield — Galerie d'images</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: system-ui, sans-serif;
+      background: #0d0d0d;
+      color: #e0e0e0;
+      min-height: 100vh;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 1rem 2rem;
+      border-bottom: 1px solid #222;
+      position: sticky;
+      top: 0;
+      background: #0d0d0d;
+      z-index: 10;
+    }
+
+    header h1 {
+      font-size: 1.2rem;
+      font-weight: 600;
+      letter-spacing: 0.05em;
+    }
+
+    .controls {
+      display: flex;
+      gap: 0.75rem;
+      align-items: center;
+    }
+
+    input[type="text"] {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #e0e0e0;
+      padding: 0.45rem 0.85rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      width: 260px;
+      outline: none;
+    }
+    input[type="text"]:focus { border-color: #6366f1; }
+
+    select {
+      background: #1a1a1a;
+      border: 1px solid #333;
+      color: #e0e0e0;
+      padding: 0.45rem 0.75rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      outline: none;
+    }
+
+    button {
+      background: #6366f1;
+      color: #fff;
+      border: none;
+      padding: 0.45rem 1rem;
+      border-radius: 6px;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: background 0.2s;
+    }
+    button:hover { background: #4f46e5; }
+    button:disabled { background: #333; color: #666; cursor: not-allowed; }
+
+    #status {
+      text-align: center;
+      padding: 2rem;
+      color: #666;
+      font-size: 0.9rem;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+      gap: 1rem;
+      padding: 1.5rem 2rem;
+    }
+
+    .card {
+      background: #1a1a1a;
+      border-radius: 10px;
+      overflow: hidden;
+      border: 1px solid #222;
+      transition: transform 0.2s, border-color 0.2s;
+      cursor: pointer;
+    }
+    .card:hover { transform: translateY(-3px); border-color: #6366f1; }
+
+    .card img {
+      width: 100%;
+      aspect-ratio: 1 / 1;
+      object-fit: cover;
+      display: block;
+      background: #111;
+    }
+
+    .card-info {
+      padding: 0.65rem 0.85rem;
+    }
+    .card-model {
+      font-size: 0.75rem;
+      color: #6366f1;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    .card-prompt {
+      font-size: 0.8rem;
+      color: #aaa;
+      margin-top: 0.25rem;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+    .card-date {
+      font-size: 0.72rem;
+      color: #555;
+      margin-top: 0.25rem;
+    }
+
+    /* Lightbox */
+    #lightbox {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.9);
+      z-index: 100;
+      align-items: center;
+      justify-content: center;
+      flex-direction: column;
+      gap: 1rem;
+      padding: 2rem;
+    }
+    #lightbox.open { display: flex; }
+
+    #lightbox img {
+      max-width: 90vw;
+      max-height: 80vh;
+      border-radius: 8px;
+      object-fit: contain;
+    }
+
+    #lightbox-info {
+      color: #ccc;
+      font-size: 0.85rem;
+      text-align: center;
+      max-width: 600px;
+    }
+
+    #lightbox-close {
+      position: absolute;
+      top: 1rem;
+      right: 1.25rem;
+      background: none;
+      font-size: 1.8rem;
+      color: #fff;
+      border: none;
+      cursor: pointer;
+      line-height: 1;
+    }
+
+    #lightbox-actions {
+      display: flex;
+      gap: 0.75rem;
+    }
+
+    .pagination {
+      display: flex;
+      justify-content: center;
+      gap: 1rem;
+      padding: 1.5rem 2rem 2.5rem;
+    }
+
+    .tag {
+      display: inline-block;
+      background: #252525;
+      border-radius: 4px;
+      padding: 0.15rem 0.45rem;
+      font-size: 0.7rem;
+      color: #888;
+      margin-top: 0.3rem;
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Higgsfield — Galerie</h1>
+  <div class="controls">
+    <input type="text" id="search" placeholder="Rechercher par prompt, modèle…" oninput="filterCards()" />
+    <select id="sort" onchange="filterCards()">
+      <option value="desc">Plus récent</option>
+      <option value="asc">Plus ancien</option>
+    </select>
+    <button id="loadBtn" onclick="loadGenerations()">Charger</button>
+  </div>
+</header>
+
+<div id="status">Entrez votre clé API puis cliquez sur Charger.</div>
+<div class="grid" id="grid"></div>
+
+<div class="pagination" id="pagination" style="display:none">
+  <button id="prevBtn" onclick="prevPage()" disabled>← Précédent</button>
+  <span id="pageInfo" style="line-height:2;font-size:0.85rem;color:#666"></span>
+  <button id="nextBtn" onclick="nextPage()">Suivant →</button>
+</div>
+
+<!-- Lightbox -->
+<div id="lightbox">
+  <button id="lightbox-close" onclick="closeLightbox()">×</button>
+  <img id="lightbox-img" src="" alt="" />
+  <div id="lightbox-info"></div>
+  <div id="lightbox-actions">
+    <button onclick="downloadCurrent()">Télécharger</button>
+    <button onclick="copyCurrent()">Copier l'URL</button>
+  </div>
+</div>
+
+<script>
+  const API_BASE = 'https://api.higgsfield.ai';
+
+  // --- State ---
+  let allGenerations = [];
+  let filtered = [];
+  let cursorStack = [null];
+  let currentPage = 0;
+  let nextCursor = null;
+  let currentItem = null;
+
+  function getApiKey() {
+    let key = localStorage.getItem('hf_api_key');
+    if (!key) {
+      key = prompt('Clé API Higgsfield (stockée localement) :');
+      if (key) localStorage.setItem('hf_api_key', key.trim());
+    }
+    return key ? key.trim() : null;
+  }
+
+  async function fetchGenerations(cursor = null) {
+    const key = getApiKey();
+    if (!key) { setStatus('Clé API manquante.'); return; }
+
+    setStatus('Chargement…');
+    document.getElementById('loadBtn').disabled = true;
+
+    const params = new URLSearchParams({ type: 'image', size: 48 });
+    if (cursor) params.set('cursor', cursor);
+
+    try {
+      const res = await fetch(`${API_BASE}/v1/generations?${params}`, {
+        headers: { Authorization: `Bearer ${key}` }
+      });
+
+      if (res.status === 401) {
+        localStorage.removeItem('hf_api_key');
+        setStatus('Clé API invalide. Rechargez la page pour réessayer.');
+        return;
+      }
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
+
+      const data = await res.json();
+      allGenerations = data.generations ?? data.items ?? data.data ?? [];
+      nextCursor = data.next_cursor ?? null;
+
+      filterCards();
+      document.getElementById('pagination').style.display = 'flex';
+      updatePagination();
+    } catch (e) {
+      setStatus(`Erreur : ${e.message}`);
+    } finally {
+      document.getElementById('loadBtn').disabled = false;
+    }
+  }
+
+  function filterCards() {
+    const q = document.getElementById('search').value.toLowerCase();
+    const sort = document.getElementById('sort').value;
+
+    filtered = allGenerations.filter(g => {
+      const prompt = (g.params?.prompt ?? '').toLowerCase();
+      const model = (g.model ?? '').toLowerCase();
+      return !q || prompt.includes(q) || model.includes(q);
+    });
+
+    if (sort === 'asc') filtered = [...filtered].reverse();
+
+    renderGrid();
+    setStatus(filtered.length === 0 ? 'Aucun résultat.' : '');
+  }
+
+  function renderGrid() {
+    const grid = document.getElementById('grid');
+    grid.innerHTML = '';
+
+    filtered.forEach(g => {
+      const url = getImageUrl(g);
+      if (!url) return;
+
+      const card = document.createElement('div');
+      card.className = 'card';
+      card.onclick = () => openLightbox(g);
+
+      const date = g.created_at ? new Date(g.created_at).toLocaleDateString('fr-FR') : '';
+      const prompt = g.params?.prompt ?? g.prompt ?? '';
+      const model = g.model ?? '';
+
+      card.innerHTML = `
+        <img src="${url}" alt="${escHtml(prompt)}" loading="lazy" onerror="this.style.background='#111';this.alt='Erreur'" />
+        <div class="card-info">
+          <div class="card-model">${escHtml(model)}</div>
+          <div class="card-prompt" title="${escHtml(prompt)}">${escHtml(prompt) || '—'}</div>
+          <div class="card-date">${date}</div>
+        </div>`;
+      grid.appendChild(card);
+    });
+
+    if (filtered.length === 0 && allGenerations.length > 0) {
+      setStatus('Aucun résultat pour cette recherche.');
+    }
+  }
+
+  function getImageUrl(g) {
+    if (g.results?.[0]?.url) return g.results[0].url;
+    if (g.result_url) return g.result_url;
+    if (g.output_url) return g.output_url;
+    if (typeof g.results === 'string') return g.results;
+    return null;
+  }
+
+  function openLightbox(g) {
+    currentItem = g;
+    const url = getImageUrl(g);
+    document.getElementById('lightbox-img').src = url;
+    const prompt = g.params?.prompt ?? g.prompt ?? '';
+    const model = g.model ?? '';
+    const date = g.created_at ? new Date(g.created_at).toLocaleString('fr-FR') : '';
+    document.getElementById('lightbox-info').innerHTML =
+      `<strong>${escHtml(model)}</strong>${date ? ' · ' + date : ''}<br/><em>${escHtml(prompt)}</em>`;
+    document.getElementById('lightbox').classList.add('open');
+  }
+
+  function closeLightbox() {
+    document.getElementById('lightbox').classList.remove('open');
+    document.getElementById('lightbox-img').src = '';
+    currentItem = null;
+  }
+
+  function downloadCurrent() {
+    if (!currentItem) return;
+    const url = getImageUrl(currentItem);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `higgsfield-${currentItem.id ?? Date.now()}.jpg`;
+    a.target = '_blank';
+    a.click();
+  }
+
+  async function copyCurrent() {
+    if (!currentItem) return;
+    await navigator.clipboard.writeText(getImageUrl(currentItem));
+    alert('URL copiée !');
+  }
+
+  function prevPage() {
+    if (currentPage <= 0) return;
+    currentPage--;
+    cursorStack.pop();
+    fetchGenerations(cursorStack[cursorStack.length - 1]);
+  }
+
+  function nextPage() {
+    if (!nextCursor) return;
+    cursorStack.push(nextCursor);
+    currentPage++;
+    fetchGenerations(nextCursor);
+  }
+
+  function updatePagination() {
+    document.getElementById('prevBtn').disabled = currentPage === 0;
+    document.getElementById('nextBtn').disabled = !nextCursor;
+    document.getElementById('pageInfo').textContent = `Page ${currentPage + 1}`;
+  }
+
+  function setStatus(msg) {
+    document.getElementById('status').textContent = msg;
+  }
+
+  function escHtml(str) {
+    return String(str).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+  }
+
+  function loadGenerations() {
+    currentPage = 0;
+    cursorStack = [null];
+    fetchGenerations(null);
+  }
+
+  // Close lightbox on backdrop click
+  document.getElementById('lightbox').addEventListener('click', e => {
+    if (e.target === document.getElementById('lightbox')) closeLightbox();
+  });
+
+  // Close lightbox on Escape
+  document.addEventListener('keydown', e => {
+    if (e.key === 'Escape') closeLightbox();
+  });
+</script>
+</body>
+</html>
