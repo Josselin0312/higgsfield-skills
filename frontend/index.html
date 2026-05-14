@@ -1,0 +1,256 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Higgsfield — Influencer Image Generator</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div id="app">
+    <!-- Sidebar -->
+    <aside id="sidebar">
+      <div class="logo">
+        <span class="logo-icon">H</span>
+        <span class="logo-text">Higgsfield</span>
+      </div>
+      <nav>
+        <button class="nav-btn active" data-view="dashboard" onclick="navigate('dashboard')">
+          <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
+          Dashboard
+        </button>
+        <div class="nav-section-label">Influenceurs</div>
+        <div id="influencer-list-nav"></div>
+        <button class="nav-btn add-influencer-btn" onclick="openAddInfluencer()">
+          <svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          Ajouter
+        </button>
+      </nav>
+    </aside>
+
+    <!-- Main content -->
+    <main id="main">
+      <!-- Dashboard view -->
+      <section id="view-dashboard" class="view active">
+        <div class="view-header">
+          <h1>Dashboard</h1>
+          <button class="btn btn-primary" onclick="openAddInfluencer()">+ Influenceur</button>
+        </div>
+        <div id="dashboard-stats" class="stats-grid"></div>
+        <div class="section-title">Tous les influenceurs</div>
+        <div id="dashboard-influencers" class="influencer-grid"></div>
+      </section>
+
+      <!-- Influencer view -->
+      <section id="view-influencer" class="view">
+        <div class="view-header">
+          <div>
+            <h1 id="inf-name">—</h1>
+            <p id="inf-meta" class="subtitle"></p>
+          </div>
+          <div class="header-actions">
+            <button class="btn btn-secondary" onclick="openBulkGenerate()">Génération en masse</button>
+            <button class="btn btn-primary" onclick="openSingleGenerate()">+ Générer</button>
+          </div>
+        </div>
+
+        <!-- Tabs -->
+        <div class="tabs">
+          <button class="tab active" data-tab="gallery" onclick="switchTab('gallery')">Galerie</button>
+          <button class="tab" data-tab="bulk" onclick="switchTab('bulk')">Jobs en masse</button>
+          <button class="tab" data-tab="settings" onclick="switchTab('settings')">Paramètres</button>
+        </div>
+
+        <!-- Gallery tab -->
+        <div id="tab-gallery" class="tab-content active">
+          <div class="filter-bar">
+            <button class="filter-btn active" onclick="filterGallery('all', this)">Tout</button>
+            <button class="filter-btn" onclick="filterGallery('done', this)">Terminé</button>
+            <button class="filter-btn" onclick="filterGallery('generating', this)">En cours</button>
+            <button class="filter-btn" onclick="filterGallery('failed', this)">Échec</button>
+          </div>
+          <div id="gallery-grid" class="gallery-grid"></div>
+          <div id="gallery-empty" class="empty-state" style="display:none">
+            <p>Aucune génération pour cet influenceur.</p>
+            <button class="btn btn-primary" onclick="openSingleGenerate()">Générer des images</button>
+          </div>
+        </div>
+
+        <!-- Bulk jobs tab -->
+        <div id="tab-bulk" class="tab-content">
+          <div id="bulk-jobs-list"></div>
+          <div id="bulk-empty" class="empty-state" style="display:none">
+            <p>Aucun job en masse.</p>
+            <button class="btn btn-primary" onclick="openBulkGenerate()">Lancer une génération en masse</button>
+          </div>
+        </div>
+
+        <!-- Settings tab -->
+        <div id="tab-settings" class="tab-content">
+          <form id="influencer-settings-form" onsubmit="saveInfluencerSettings(event)">
+            <div class="form-group">
+              <label>Nom</label>
+              <input type="text" id="settings-name" required />
+            </div>
+            <div class="form-group">
+              <label>Handle (@username)</label>
+              <input type="text" id="settings-handle" placeholder="@nom" />
+            </div>
+            <div class="form-group">
+              <label>Niche</label>
+              <input type="text" id="settings-niche" placeholder="Mode, Fitness, Lifestyle…" />
+            </div>
+            <div class="form-group">
+              <label>Notes de style</label>
+              <textarea id="settings-style" rows="4" placeholder="Style visuel, ton, aesthetic…"></textarea>
+            </div>
+            <div class="form-group">
+              <label>URL avatar</label>
+              <input type="url" id="settings-avatar" placeholder="https://…" />
+            </div>
+            <div class="form-actions">
+              <button type="submit" class="btn btn-primary">Enregistrer</button>
+              <button type="button" class="btn btn-danger" onclick="confirmDeleteInfluencer()">Supprimer l'influenceur</button>
+            </div>
+          </form>
+        </div>
+      </section>
+    </main>
+  </div>
+
+  <!-- Modal: Add influencer -->
+  <div id="modal-add-influencer" class="modal-overlay" style="display:none">
+    <div class="modal">
+      <h2>Nouvel influenceur</h2>
+      <form onsubmit="submitAddInfluencer(event)">
+        <div class="form-group">
+          <label>Nom *</label>
+          <input type="text" id="new-inf-name" required placeholder="Nom de l'influenceur" />
+        </div>
+        <div class="form-group">
+          <label>Handle</label>
+          <input type="text" id="new-inf-handle" placeholder="@username" />
+        </div>
+        <div class="form-group">
+          <label>Niche</label>
+          <input type="text" id="new-inf-niche" placeholder="Mode, Fitness, Lifestyle…" />
+        </div>
+        <div class="form-group">
+          <label>Notes de style</label>
+          <textarea id="new-inf-style" rows="3" placeholder="Style visuel, ton, aesthetic…"></textarea>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-add-influencer')">Annuler</button>
+          <button type="submit" class="btn btn-primary">Créer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Single generate -->
+  <div id="modal-single-generate" class="modal-overlay" style="display:none">
+    <div class="modal modal-wide">
+      <h2>Générer une image</h2>
+      <form onsubmit="submitSingleGenerate(event)">
+        <div class="form-group">
+          <label>Prompt *</label>
+          <textarea id="gen-prompt" rows="4" required placeholder="Décris l'image à générer…"></textarea>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Modèle</label>
+            <select id="gen-model">
+              <option value="soul_2">Soul 2 (portraits/mode/UGC)</option>
+              <option value="nano_banana_2">Nano Banana 2 (4K top qualité)</option>
+              <option value="marketing_studio_image">Marketing Studio (produits/ads)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Format</label>
+            <select id="gen-ratio">
+              <option value="9:16">9:16 (Stories)</option>
+              <option value="1:1">1:1 (Post carré)</option>
+              <option value="4:5">4:5 (Post portrait)</option>
+              <option value="16:9">16:9 (Paysage)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Nombre</label>
+            <select id="gen-count">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="3">3</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-single-generate')">Annuler</button>
+          <button type="submit" class="btn btn-primary">Générer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Bulk generate -->
+  <div id="modal-bulk-generate" class="modal-overlay" style="display:none">
+    <div class="modal modal-wide">
+      <h2>Génération en masse</h2>
+      <form onsubmit="submitBulkGenerate(event)">
+        <div class="form-group">
+          <label>Nom du job (optionnel)</label>
+          <input type="text" id="bulk-name" placeholder="Ex: Campagne été 2025" />
+        </div>
+        <div class="form-group">
+          <label>Prompts <span class="hint">(un par ligne)</span></label>
+          <textarea id="bulk-prompts" rows="10" required
+            placeholder="A young woman wearing summer dress in Paris, golden hour&#10;Close-up portrait, natural light, minimal makeup&#10;Fashion shoot, rooftop, city skyline…"></textarea>
+        </div>
+        <div id="bulk-prompt-count" class="prompt-count">0 prompts</div>
+        <div class="form-row">
+          <div class="form-group">
+            <label>Modèle</label>
+            <select id="bulk-model">
+              <option value="soul_2">Soul 2 (portraits/mode/UGC)</option>
+              <option value="nano_banana_2">Nano Banana 2 (4K top qualité)</option>
+              <option value="marketing_studio_image">Marketing Studio (produits/ads)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Format</label>
+            <select id="bulk-ratio">
+              <option value="9:16">9:16 (Stories)</option>
+              <option value="1:1">1:1 (Post carré)</option>
+              <option value="4:5">4:5 (Post portrait)</option>
+              <option value="16:9">16:9 (Paysage)</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label>Images/prompt</label>
+            <select id="bulk-count">
+              <option value="1">1</option>
+              <option value="2">2</option>
+              <option value="4">4</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn btn-secondary" onclick="closeModal('modal-bulk-generate')">Annuler</button>
+          <button type="submit" class="btn btn-primary" id="bulk-submit-btn">Lancer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Modal: Image viewer -->
+  <div id="modal-image-viewer" class="modal-overlay modal-fullscreen" style="display:none" onclick="closeModal('modal-image-viewer')">
+    <div class="image-viewer" onclick="event.stopPropagation()">
+      <button class="viewer-close" onclick="closeModal('modal-image-viewer')">✕</button>
+      <img id="viewer-img" src="" alt="" />
+      <div id="viewer-meta"></div>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
+</body>
+</html>
