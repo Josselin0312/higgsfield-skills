@@ -307,8 +307,16 @@ function viewerNav(dir) {
 }
 
 // ── Modals ────────────────────────────────────────────────────────────────
-function openModal(name)  { document.getElementById(`modal-${name}`).classList.add('open'); }
-function closeModal(name) { document.getElementById(`modal-${name}`).classList.remove('open'); }
+function openModal(name)  {
+  const el = document.getElementById(`modal-${name}`);
+  el.style.display = 'flex';
+  el.classList.add('open');
+}
+function closeModal(name) {
+  const el = document.getElementById(`modal-${name}`);
+  el.style.display = 'none';
+  el.classList.remove('open');
+}
 
 document.addEventListener('keydown', e => {
   if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(m => m.classList.remove('open'));

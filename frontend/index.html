@@ -136,7 +136,7 @@
   </main>
 
   <!-- ── Modal: Ajouter influenceur ── -->
-  <div id="modal-add-inf" class="overlay" onclick="closeModal('add-inf')">
+  <div id="modal-add-inf" class="overlay" style="display:none" onclick="closeModal('add-inf')">
     <div class="modal" onclick="event.stopPropagation()">
       <h3>Nouvel influenceur</h3>
       <form onsubmit="submitAddInf(event)">
@@ -157,7 +157,7 @@
   </div>
 
   <!-- ── Modal: Générer un post ── -->
-  <div id="modal-single" class="overlay" onclick="closeModal('single')">
+  <div id="modal-single" class="overlay" style="display:none" onclick="closeModal('single')">
     <div class="modal modal-lg" onclick="event.stopPropagation()">
       <div class="modal-type-header" id="modal-type-header"></div>
       <h3 id="modal-single-title">Nouveau post</h3>
@@ -188,7 +188,7 @@
   </div>
 
   <!-- ── Modal: Génération en masse ── -->
-  <div id="modal-bulk" class="overlay" onclick="closeModal('bulk')">
+  <div id="modal-bulk" class="overlay" style="display:none" onclick="closeModal('bulk')">
     <div class="modal modal-lg" onclick="event.stopPropagation()">
       <div class="modal-type-header" id="modal-bulk-type-header"></div>
       <h3 id="modal-bulk-title">Génération en masse</h3>
@@ -220,7 +220,7 @@
   </div>
 
   <!-- ── Viewer image ── -->
-  <div id="modal-viewer" class="overlay viewer-overlay" onclick="closeModal('viewer')">
+  <div id="modal-viewer" class="overlay viewer-overlay" style="display:none" onclick="closeModal('viewer')">
     <button class="viewer-close" onclick="closeModal('viewer')">✕</button>
     <div class="viewer-inner" onclick="event.stopPropagation()">
       <button class="viewer-nav left" onclick="viewerNav(-1)">‹</button>
