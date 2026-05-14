@@ -7,6 +7,188 @@
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="styles.css" />
+  <style>
+    /* ── Soul Character ── */
+    .soul-section {
+      padding: 0 36px 36px;
+    }
+    .soul-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 20px 24px;
+    }
+    .soul-card-header {
+      display: flex; align-items: center;
+      justify-content: space-between; margin-bottom: 16px;
+    }
+    .soul-title {
+      font-size: 14px; font-weight: 600;
+    }
+    .soul-status {
+      display: flex; align-items: center; gap: 8px;
+      font-size: 13px;
+    }
+    .soul-status-dot {
+      width: 8px; height: 8px; border-radius: 50%;
+    }
+    .soul-status-dot.ready  { background: #22c55e; }
+    .soul-status-dot.training { background: #f59e0b; animation: pulse 1.2s ease-in-out infinite; }
+    .soul-status-dot.none   { background: var(--border); }
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.3; }
+    }
+    .soul-upload-row {
+      display: grid; grid-template-columns: 1fr 1fr; gap: 12px;
+    }
+    .soul-drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 24px 16px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      position: relative;
+    }
+    .soul-drop-zone:hover, .soul-drop-zone.drag-over {
+      border-color: var(--accent);
+      background: #f5f0ff;
+    }
+    .soul-drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer;
+    }
+    .soul-drop-icon { font-size: 28px; margin-bottom: 6px; color: var(--muted); }
+    .soul-drop-label { font-size: 12px; font-weight: 600; color: var(--text); margin-bottom: 2px; }
+    .soul-drop-hint  { font-size: 11px; color: var(--muted); }
+    .soul-drop-zone.has-file { border-color: var(--accent); border-style: solid; }
+    .soul-drop-zone.has-file .soul-drop-icon { color: var(--accent); }
+    .soul-upload-btn {
+      margin-top: 14px; width: 100%;
+      padding: 10px; background: var(--accent); color: #fff;
+      border: none; border-radius: 10px; font-size: 14px; font-weight: 500;
+      cursor: pointer; font-family: inherit; transition: opacity 0.15s;
+    }
+    .soul-upload-btn:hover { opacity: 0.85; }
+    .soul-ready-badge {
+      display: inline-flex; align-items: center; gap: 6px;
+      background: #dcfce7; color: #166534;
+      padding: 6px 14px; border-radius: 20px;
+      font-size: 13px; font-weight: 600;
+    }
+    .soul-training-badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      background: #fef9c3; color: #854d0e;
+      padding: 6px 14px; border-radius: 20px;
+      font-size: 13px; font-weight: 500;
+    }
+
+    /* ── À valider badge ── */
+    .sidebar-validate-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; border-radius: 10px; cursor: pointer;
+      transition: background 0.15s; margin-top: 4px;
+    }
+    .sidebar-validate-row:hover { background: var(--bg); }
+    .sidebar-validate-row.active { background: var(--bg); font-weight: 500; }
+    .sidebar-validate-label { font-size: 14px; color: var(--muted); }
+    .sidebar-validate-row.active .sidebar-validate-label { color: var(--text); }
+    .sidebar-validate-row:hover .sidebar-validate-label { color: var(--text); }
+    .validate-badge {
+      background: #dc2626; color: #fff;
+      font-size: 11px; font-weight: 700;
+      padding: 2px 7px; border-radius: 10px;
+      min-width: 20px; text-align: center;
+    }
+    .validate-badge.zero { background: var(--border); color: var(--muted); }
+
+    /* ── Validation queue screen ── */
+    .validate-queue { padding: 0 36px 40px; display: flex; flex-direction: column; gap: 20px; }
+    .validate-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      overflow: hidden;
+    }
+    .validate-card-header {
+      display: flex; align-items: center;
+      justify-content: space-between;
+      padding: 14px 18px 10px;
+    }
+    .validate-card-meta {
+      display: flex; align-items: center; gap: 10px; flex: 1;
+    }
+    .validate-card-prompt {
+      font-size: 13px; font-weight: 500;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+      flex: 1;
+    }
+    .validate-card-images {
+      display: flex; gap: 8px;
+      padding: 0 18px 14px;
+      overflow-x: auto;
+    }
+    .validate-img {
+      height: 160px;
+      aspect-ratio: 9/16;
+      object-fit: cover;
+      border-radius: 8px;
+      cursor: zoom-in;
+      flex-shrink: 0;
+    }
+    .validate-img.sq { aspect-ratio: 4/5; }
+    .validate-card-actions {
+      display: flex; gap: 10px;
+      padding: 0 18px 16px;
+    }
+    .btn-approve {
+      padding: 8px 20px; background: #22c55e; color: #fff;
+      border: none; border-radius: 10px; font-size: 14px; font-weight: 500;
+      cursor: pointer; font-family: inherit; transition: opacity 0.15s;
+    }
+    .btn-approve:hover { opacity: 0.85; }
+    .btn-reject {
+      padding: 8px 20px; background: none; color: #dc2626;
+      border: 1px solid #dc2626; border-radius: 10px;
+      font-size: 14px; font-weight: 500;
+      cursor: pointer; font-family: inherit; transition: all 0.15s;
+    }
+    .btn-reject:hover { background: #fee2e2; }
+    .validate-card-date { font-size: 11px; color: var(--muted); padding: 0 18px 12px; }
+
+    /* ── No soul warning ── */
+    .badge-no-soul {
+      display: inline-flex; align-items: center; gap: 4px;
+      background: #fef3c7; color: #92400e;
+      font-size: 11px; font-weight: 500;
+      padding: 2px 8px; border-radius: 20px;
+    }
+
+    /* ── Image import drop zone in modal ── */
+    .import-drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 40px 20px;
+      text-align: center;
+      cursor: pointer;
+      transition: border-color 0.15s, background 0.15s;
+      position: relative;
+      margin-bottom: 4px;
+    }
+    .import-drop-zone:hover, .import-drop-zone.drag-over {
+      border-color: var(--accent);
+      background: #f5f0ff;
+    }
+    .import-drop-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer;
+    }
+    .import-drop-icon { font-size: 36px; color: var(--muted); margin-bottom: 8px; }
+    .import-drop-text { font-size: 14px; font-weight: 500; margin-bottom: 4px; }
+    .import-drop-hint { font-size: 12px; color: var(--muted); }
+    .import-file-list {
+      font-size: 12px; color: var(--accent); font-weight: 500; margin-top: 8px;
+    }
+  </style>
 </head>
 <body>
 
@@ -59,6 +241,12 @@
           </div>
         </button>
       </div>
+
+      <!-- À valider -->
+      <div class="sidebar-validate-row" id="validate-nav-row" onclick="showValidateScreen()">
+        <span class="sidebar-validate-label">À valider</span>
+        <span class="validate-badge zero" id="validate-badge">0</span>
+      </div>
     </div>
   </aside>
 
@@ -88,6 +276,22 @@
       <!-- Stats par type -->
       <div class="stats-row" id="inf-stats"></div>
 
+      <!-- Soul Character -->
+      <div class="soul-section">
+        <div class="soul-card">
+          <div class="soul-card-header">
+            <div>
+              <div class="soul-title">Soul Character</div>
+              <div class="muted" style="font-size:12px;margin-top:2px">
+                Photos de référence pour la cohérence visuelle
+              </div>
+            </div>
+            <div id="soul-status-display"></div>
+          </div>
+          <div id="soul-body"></div>
+        </div>
+      </div>
+
       <!-- Aperçu récent -->
       <div class="section-block">
         <div class="section-header">
@@ -111,6 +315,13 @@
           </div>
         </div>
         <div class="top-bar-right">
+          <button class="btn-ghost" id="btn-import-json" onclick="openModal('json')" style="display:none">
+            Importer JSON
+          </button>
+          <button class="btn-ghost" id="btn-script" onclick="openModal('script')" style="display:none">
+            Script histoire
+          </button>
+          <button class="btn-ghost" onclick="openModal('import')">Importer images</button>
           <button class="btn-ghost" onclick="openBulkModal()">Générer en masse</button>
           <button class="btn-primary" onclick="openSingleModal()">+ Nouveau post</button>
         </div>
@@ -120,6 +331,7 @@
       <div class="filter-row">
         <button class="filter active" onclick="setFilter('all',this)">Tout</button>
         <button class="filter" onclick="setFilter('done',this)">Terminé</button>
+        <button class="filter" onclick="setFilter('to_validate',this)">À valider</button>
         <button class="filter" onclick="setFilter('generating',this)">En cours</button>
         <button class="filter" onclick="setFilter('failed',this)">Échec</button>
       </div>
@@ -130,6 +342,28 @@
         <div class="empty-icon">○</div>
         <p class="muted">Aucun post généré.</p>
         <button class="btn-primary" style="margin-top:16px" onclick="openSingleModal()">+ Nouveau post</button>
+      </div>
+    </div>
+
+    <!-- Écran À valider -->
+    <div id="screen-validate" class="screen" style="display:none">
+      <div class="top-bar">
+        <div class="top-bar-left">
+          <div style="width:44px;height:44px;border-radius:12px;background:#fef9c3;color:#854d0e;
+                      display:flex;align-items:center;justify-content:center;font-size:22px;flex-shrink:0;">
+            ✓
+          </div>
+          <div>
+            <h1>À valider</h1>
+            <p id="validate-top-sub" class="muted">Carrousels générés en attente d'approbation</p>
+          </div>
+        </div>
+      </div>
+      <div id="validate-queue" class="validate-queue"></div>
+      <div id="validate-empty" class="center-screen" style="display:none">
+        <div class="empty-icon">✓</div>
+        <h2 style="font-size:18px">Tout est validé !</h2>
+        <p class="muted">Aucun carrousel en attente de validation.</p>
       </div>
     </div>
 
@@ -219,12 +453,98 @@
     </div>
   </div>
 
+  <!-- ── Modal: Importer JSON Claude ── -->
+  <div id="modal-json" class="overlay" style="display:none" onclick="closeModal('json')">
+    <div class="modal modal-lg" onclick="event.stopPropagation()">
+      <div class="modal-type-header" id="modal-json-type-header"></div>
+      <h3>Importer depuis Claude (JSON)</h3>
+      <form onsubmit="submitJsonImport(event)">
+        <label>JSON array de prompts *</label>
+        <textarea id="json-input" rows="12" required
+          placeholder='["Portrait en pleine lumière, sourire naturel", "Tenue casual, fond urbain", "Close-up yeux, lumière latérale"]&#10;&#10;— ou objet unique —&#10;{"prompt": "Portrait lumière dorée", "count": 3}'></textarea>
+        <p id="json-count" class="prompt-count">0 prompts détectés</p>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" onclick="closeModal('json')">Annuler</button>
+          <button type="submit" class="btn-primary" id="json-submit-btn">Importer et générer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Modal: Script histoire ── -->
+  <div id="modal-script" class="overlay" style="display:none" onclick="closeModal('script')">
+    <div class="modal modal-lg" onclick="event.stopPropagation()">
+      <h3>Script histoire</h3>
+      <form onsubmit="submitScript(event)">
+        <label>Frames <span class="muted">— une ligne = une image</span></label>
+        <textarea id="sc-frames" rows="8" oninput="countScriptFrames()" required
+          placeholder="Image 1: Réveil matinal, lumière douce filtrée&#10;Image 2: Café fumant sur table en bois&#10;Image 3: Tenue du jour, miroir plein pied&#10;Image 4: Sortie en ville, regard confiant"></textarea>
+        <p id="sc-count" class="prompt-count">0 frames</p>
+        <div class="two-col">
+          <div>
+            <label>Images par frame</label>
+            <select id="sc-count-img">
+              <option value="1" selected>1 image</option>
+              <option value="2">2 images</option>
+            </select>
+          </div>
+          <div>
+            <label>Modèle</label>
+            <select id="sc-model">
+              <option value="soul_2">Soul 2 — Portraits</option>
+              <option value="nano_banana_2">Nano Banana 2 — 4K</option>
+              <option value="marketing_studio_image">Marketing Studio</option>
+            </select>
+          </div>
+        </div>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" onclick="closeModal('script')">Annuler</button>
+          <button type="submit" class="btn-primary" id="script-submit-btn">Générer l'histoire</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- ── Modal: Importer images externes ── -->
+  <div id="modal-import" class="overlay" style="display:none" onclick="closeModal('import')">
+    <div class="modal modal-lg" onclick="event.stopPropagation()">
+      <h3>Importer des images</h3>
+      <form onsubmit="submitImageImport(event)">
+        <label>Fichiers images *</label>
+        <div class="import-drop-zone" id="import-drop-zone"
+             ondragover="importDragOver(event)" ondragleave="importDragLeave(event)"
+             ondrop="importDrop(event)">
+          <input type="file" id="import-files" accept="image/*" multiple
+                 onchange="importFilesSelected(event)" />
+          <div class="import-drop-icon">🖼</div>
+          <div class="import-drop-text">Glisse tes images ici</div>
+          <div class="import-drop-hint">ou clique pour sélectionner · JPG, PNG, WEBP</div>
+        </div>
+        <div id="import-file-list" class="import-file-list"></div>
+        <label style="margin-top:16px">Type de contenu</label>
+        <select id="import-content-type">
+          <option value="instagram">Instagram — Carousel 4:5</option>
+          <option value="tiktok">TikTok — Carousel 9:16</option>
+          <option value="threads">Threads — 9:16</option>
+          <option value="histoire">Histoire — Séquence 9:16</option>
+        </select>
+        <label>Description / Prompt</label>
+        <textarea id="import-prompt" rows="2"
+          placeholder="Description optionnelle de ce post…"></textarea>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" onclick="closeModal('import')">Annuler</button>
+          <button type="submit" class="btn-primary" id="import-submit-btn">Importer</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
   <!-- ── Viewer image ── -->
   <div id="modal-viewer" class="overlay viewer-overlay" style="display:none" onclick="closeModal('viewer')">
     <button class="viewer-close" onclick="closeModal('viewer')">✕</button>
     <div class="viewer-inner" onclick="event.stopPropagation()">
       <button class="viewer-nav left" onclick="viewerNav(-1)">‹</button>
-      <img id="viewer-img" src="" />
+      <img id="viewer-img" src="" alt="" />
       <button class="viewer-nav right" onclick="viewerNav(1)">›</button>
     </div>
     <p id="viewer-counter" class="viewer-counter"></p>
