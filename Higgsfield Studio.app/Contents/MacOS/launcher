@@ -1,0 +1,29 @@
+#!/bin/bash
+
+# Dossier racine du projet (parent du .app)
+ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+cd "$ROOT"
+
+# ── Clé API : demande si absente ──────────────────────────────────────────────
+if [ ! -f "$ROOT/.env" ]; then
+  KEY=$(osascript <<'APPLESCRIPT'
+    set response to display dialog "Entre ta clé API Higgsfield :" ¬
+      default answer "" ¬
+      with title "Higgsfield Studio — Premier lancement" ¬
+      buttons {"Annuler", "OK"} default button "OK"
+    return text returned of response
+APPLESCRIPT
+  )
+  if [ -z "$KEY" ]; then exit 0; fi
+  printf "HIGGSFIELD_API_KEY=%s\nHIGGSFIELD_API_URL=https://api.higgsfield.ai\n" "$KEY" > "$ROOT/.env"
+fi
+
+# ── Dépendances ───────────────────────────────────────────────────────────────
+python3 -m pip install -q fastapi uvicorn httpx python-dotenv aiosqlite python-multipart 2>/dev/null
+
+# ── Ouvre le navigateur après 3 secondes ─────────────────────────────────────
+(sleep 3 && open http://localhost:8000) &
+
+# ── Lance le serveur ──────────────────────────────────────────────────────────
+cd "$ROOT/backend"
+python3 -m uvicorn main:app --host 127.0.0.1 --port 8000
