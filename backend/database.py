@@ -22,18 +22,16 @@ async def init_db():
                 handle      TEXT,
                 niche       TEXT,
                 style_notes TEXT,
-                avatar_url  TEXT,
                 created_at  TEXT DEFAULT (datetime('now'))
             );
 
-            CREATE TABLE IF NOT EXISTS generations (
+            -- Un "post" = un carousel ou une séquence histoire
+            CREATE TABLE IF NOT EXISTS posts (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 influencer_id INTEGER NOT NULL REFERENCES influencers(id) ON DELETE CASCADE,
-                job_id        TEXT,
+                content_type  TEXT NOT NULL, -- instagram | tiktok | threads | histoire
                 prompt        TEXT NOT NULL,
-                model         TEXT NOT NULL DEFAULT 'soul_2',
-                aspect_ratio  TEXT DEFAULT '9:16',
-                count         INTEGER DEFAULT 1,
+                image_count   INTEGER DEFAULT 1,
                 status        TEXT DEFAULT 'pending',
                 image_urls    TEXT DEFAULT '[]',
                 error         TEXT,
@@ -41,15 +39,33 @@ async def init_db():
                 updated_at    TEXT DEFAULT (datetime('now'))
             );
 
+            -- Jobs de génération en masse
             CREATE TABLE IF NOT EXISTS bulk_jobs (
                 id            INTEGER PRIMARY KEY AUTOINCREMENT,
                 influencer_id INTEGER NOT NULL REFERENCES influencers(id) ON DELETE CASCADE,
+                content_type  TEXT NOT NULL,
                 name          TEXT,
                 total         INTEGER DEFAULT 0,
                 done          INTEGER DEFAULT 0,
                 failed        INTEGER DEFAULT 0,
                 status        TEXT DEFAULT 'running',
                 created_at    TEXT DEFAULT (datetime('now'))
+            );
+
+            -- Garde la table generations pour compatibilité
+            CREATE TABLE IF NOT EXISTS generations (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                influencer_id INTEGER,
+                job_id        TEXT,
+                prompt        TEXT,
+                model         TEXT DEFAULT 'soul_2',
+                aspect_ratio  TEXT DEFAULT '9:16',
+                count         INTEGER DEFAULT 1,
+                status        TEXT DEFAULT 'pending',
+                image_urls    TEXT DEFAULT '[]',
+                error         TEXT,
+                created_at    TEXT DEFAULT (datetime('now')),
+                updated_at    TEXT DEFAULT (datetime('now'))
             );
         """)
         await db.commit()

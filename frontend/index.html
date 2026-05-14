@@ -10,13 +10,14 @@
 </head>
 <body>
 
-  <!-- Sidebar -->
+  <!-- ── Sidebar ── -->
   <aside class="sidebar">
     <div class="brand">
       <div class="brand-dot"></div>
-      <span>Studio</span>
+      <span>Higgsfield Studio</span>
     </div>
 
+    <!-- Influenceurs -->
     <div class="sidebar-section">
       <p class="sidebar-label">Influenceurs</p>
       <div id="inf-nav"></div>
@@ -24,20 +25,55 @@
         <span>+</span> Ajouter
       </button>
     </div>
+
+    <!-- Génération d'image -->
+    <div class="sidebar-section" id="gen-section" style="display:none">
+      <p class="sidebar-label">Génération d'image</p>
+      <div class="gen-nav">
+        <button class="gen-nav-item" data-type="instagram" onclick="selectContentType('instagram')">
+          <span class="gen-icon">◻</span>
+          <div>
+            <div class="gen-nav-name">Instagram</div>
+            <div class="gen-nav-sub">Carousel 3–4 images</div>
+          </div>
+        </button>
+        <button class="gen-nav-item" data-type="tiktok" onclick="selectContentType('tiktok')">
+          <span class="gen-icon">▶</span>
+          <div>
+            <div class="gen-nav-name">TikTok</div>
+            <div class="gen-nav-sub">Carousel 2–6 images</div>
+          </div>
+        </button>
+        <button class="gen-nav-item" data-type="threads" onclick="selectContentType('threads')">
+          <span class="gen-icon">⊕</span>
+          <div>
+            <div class="gen-nav-name">Threads</div>
+            <div class="gen-nav-sub">Repost TikTok</div>
+          </div>
+        </button>
+        <button class="gen-nav-item" data-type="histoire" onclick="selectContentType('histoire')">
+          <span class="gen-icon">◈</span>
+          <div>
+            <div class="gen-nav-name">Histoire</div>
+            <div class="gen-nav-sub">Séquence narrative</div>
+          </div>
+        </button>
+      </div>
+    </div>
   </aside>
 
-  <!-- Main -->
+  <!-- ── Main ── -->
   <main class="main">
 
-    <!-- Empty state -->
+    <!-- Écran vide -->
     <div id="screen-empty" class="screen center-screen">
       <div class="empty-icon">✦</div>
-      <h2>Bienvenue sur Studio</h2>
+      <h2>Bienvenue sur Higgsfield Studio</h2>
       <p>Commence par ajouter un influenceur</p>
       <button class="btn-primary" onclick="openModal('add-inf')">Ajouter un influenceur</button>
     </div>
 
-    <!-- Influencer screen -->
+    <!-- Écran influenceur (accueil) -->
     <div id="screen-inf" class="screen" style="display:none">
       <div class="top-bar">
         <div class="top-bar-left">
@@ -47,13 +83,40 @@
             <p id="top-sub" class="muted"></p>
           </div>
         </div>
+      </div>
+
+      <!-- Stats par type -->
+      <div class="stats-row" id="inf-stats"></div>
+
+      <!-- Aperçu récent -->
+      <div class="section-block">
+        <div class="section-header">
+          <span class="section-title">Dernières générations</span>
+        </div>
+        <div id="recent-grid" class="gallery"></div>
+        <div id="recent-empty" class="mini-empty" style="display:none">
+          <p>Aucune image générée. Choisis un type dans le menu.</p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Écran Génération d'image -->
+    <div id="screen-gen" class="screen" style="display:none">
+      <div class="top-bar">
+        <div class="top-bar-left">
+          <div class="content-type-badge" id="ct-badge"></div>
+          <div>
+            <h1 id="ct-title"></h1>
+            <p id="ct-sub" class="muted"></p>
+          </div>
+        </div>
         <div class="top-bar-right">
-          <button class="btn-ghost" onclick="openModal('bulk')">Générer en masse</button>
-          <button class="btn-primary" onclick="openModal('generate')">+ Générer</button>
+          <button class="btn-ghost" onclick="openBulkModal()">Générer en masse</button>
+          <button class="btn-primary" onclick="openSingleModal()">+ Nouveau post</button>
         </div>
       </div>
 
-      <!-- Filter -->
+      <!-- Filtres statut -->
       <div class="filter-row">
         <button class="filter active" onclick="setFilter('all',this)">Tout</button>
         <button class="filter" onclick="setFilter('done',this)">Terminé</button>
@@ -61,12 +124,12 @@
         <button class="filter" onclick="setFilter('failed',this)">Échec</button>
       </div>
 
-      <!-- Gallery -->
-      <div id="gallery" class="gallery"></div>
-      <div id="gallery-empty" class="center-screen" style="display:none">
-        <div class="empty-icon" style="font-size:28px">○</div>
-        <p class="muted">Aucune image. Lance une génération !</p>
-        <button class="btn-primary" style="margin-top:16px" onclick="openModal('generate')">+ Générer</button>
+      <!-- Galerie posts -->
+      <div id="posts-grid" class="posts-grid"></div>
+      <div id="posts-empty" class="center-screen" style="display:none">
+        <div class="empty-icon">○</div>
+        <p class="muted">Aucun post généré.</p>
+        <button class="btn-primary" style="margin-top:16px" onclick="openSingleModal()">+ Nouveau post</button>
       </div>
     </div>
 
@@ -83,6 +146,8 @@
         <input id="ai-handle" type="text" placeholder="@sophie" />
         <label>Niche</label>
         <input id="ai-niche" type="text" placeholder="Mode, Fitness, Lifestyle…" />
+        <label>Notes de style</label>
+        <textarea id="ai-style" rows="2" placeholder="Aesthetic, ambiance, références visuelles…"></textarea>
         <div class="modal-actions">
           <button type="button" class="btn-ghost" onclick="closeModal('add-inf')">Annuler</button>
           <button type="submit" class="btn-primary">Créer</button>
@@ -91,83 +156,64 @@
     </div>
   </div>
 
-  <!-- ── Modal: Générer ── -->
-  <div id="modal-generate" class="overlay" onclick="closeModal('generate')">
-    <div class="modal" onclick="event.stopPropagation()">
-      <h3>Générer une image</h3>
-      <form onsubmit="submitGenerate(event)">
-        <label>Prompt *</label>
-        <textarea id="g-prompt" rows="4" placeholder="Décris l'image…" required></textarea>
+  <!-- ── Modal: Générer un post ── -->
+  <div id="modal-single" class="overlay" onclick="closeModal('single')">
+    <div class="modal modal-lg" onclick="event.stopPropagation()">
+      <div class="modal-type-header" id="modal-type-header"></div>
+      <h3 id="modal-single-title">Nouveau post</h3>
+      <form onsubmit="submitSingle(event)">
+        <label>Prompt — décris la scène *</label>
+        <textarea id="s-prompt" rows="4" required
+          placeholder="Ex: Portrait naturel, lumière dorée, tenue décontractée…"></textarea>
         <div class="two-col">
           <div>
-            <label>Format</label>
-            <select id="g-ratio">
-              <option value="9:16">9:16 — Stories</option>
-              <option value="1:1">1:1 — Post carré</option>
-              <option value="4:5">4:5 — Portrait</option>
-              <option value="16:9">16:9 — Paysage</option>
-            </select>
+            <label>Nombre d'images</label>
+            <select id="s-count"></select>
           </div>
           <div>
-            <label>Nombre</label>
-            <select id="g-count">
-              <option value="1">1 image</option>
-              <option value="2">2 images</option>
-              <option value="4">4 images</option>
+            <label>Modèle</label>
+            <select id="s-model">
+              <option value="soul_2">Soul 2 — Portraits</option>
+              <option value="nano_banana_2">Nano Banana 2 — 4K</option>
+              <option value="marketing_studio_image">Marketing Studio</option>
             </select>
           </div>
         </div>
-        <label>Modèle</label>
-        <select id="g-model">
-          <option value="soul_2">Soul 2 — Portraits &amp; mode</option>
-          <option value="nano_banana_2">Nano Banana 2 — 4K haute qualité</option>
-          <option value="marketing_studio_image">Marketing Studio — Produits &amp; ads</option>
-        </select>
         <div class="modal-actions">
-          <button type="button" class="btn-ghost" onclick="closeModal('generate')">Annuler</button>
+          <button type="button" class="btn-ghost" onclick="closeModal('single')">Annuler</button>
           <button type="submit" class="btn-primary">Générer</button>
         </div>
       </form>
     </div>
   </div>
 
-  <!-- ── Modal: Générer en masse ── -->
+  <!-- ── Modal: Génération en masse ── -->
   <div id="modal-bulk" class="overlay" onclick="closeModal('bulk')">
     <div class="modal modal-lg" onclick="event.stopPropagation()">
-      <h3>Génération en masse</h3>
+      <div class="modal-type-header" id="modal-bulk-type-header"></div>
+      <h3 id="modal-bulk-title">Génération en masse</h3>
       <form onsubmit="submitBulk(event)">
-        <label>Prompts <span class="muted" style="font-weight:400">— un par ligne</span></label>
-        <textarea id="b-prompts" rows="8" oninput="countPrompts()"
-          placeholder="Portrait naturel, fond blanc&#10;Tenue été, plage, coucher de soleil&#10;Close-up, lumière studio…" required></textarea>
-        <p id="b-count" class="prompt-count">0 prompts</p>
+        <label>Prompts <span class="muted">— un par ligne = un post</span></label>
+        <textarea id="b-prompts" rows="10" oninput="countBulkPrompts()"
+          placeholder="Portrait naturel, fond blanc&#10;Tenue été, plage, coucher de soleil&#10;Close-up, regard caméra…" required></textarea>
+        <p id="b-count" class="prompt-count">0 posts</p>
         <div class="two-col">
           <div>
-            <label>Format</label>
-            <select id="b-ratio">
-              <option value="9:16">9:16 — Stories</option>
-              <option value="1:1">1:1 — Carré</option>
-              <option value="4:5">4:5 — Portrait</option>
-              <option value="16:9">16:9 — Paysage</option>
-            </select>
+            <label>Images par post</label>
+            <select id="b-count-img"></select>
           </div>
           <div>
-            <label>Images / prompt</label>
-            <select id="b-count-per">
-              <option value="1">1</option>
-              <option value="2">2</option>
-              <option value="4">4</option>
+            <label>Modèle</label>
+            <select id="b-model">
+              <option value="soul_2">Soul 2 — Portraits</option>
+              <option value="nano_banana_2">Nano Banana 2 — 4K</option>
+              <option value="marketing_studio_image">Marketing Studio</option>
             </select>
           </div>
         </div>
-        <label>Modèle</label>
-        <select id="b-model">
-          <option value="soul_2">Soul 2 — Portraits &amp; mode</option>
-          <option value="nano_banana_2">Nano Banana 2 — 4K haute qualité</option>
-          <option value="marketing_studio_image">Marketing Studio — Produits &amp; ads</option>
-        </select>
         <div class="modal-actions">
           <button type="button" class="btn-ghost" onclick="closeModal('bulk')">Annuler</button>
-          <button type="submit" id="bulk-submit" class="btn-primary">Lancer</button>
+          <button type="submit" class="btn-primary" id="bulk-submit-btn">Lancer</button>
         </div>
       </form>
     </div>
@@ -176,12 +222,15 @@
   <!-- ── Viewer image ── -->
   <div id="modal-viewer" class="overlay viewer-overlay" onclick="closeModal('viewer')">
     <button class="viewer-close" onclick="closeModal('viewer')">✕</button>
-    <img id="viewer-img" src="" onclick="event.stopPropagation()" />
+    <div class="viewer-inner" onclick="event.stopPropagation()">
+      <button class="viewer-nav left" onclick="viewerNav(-1)">‹</button>
+      <img id="viewer-img" src="" />
+      <button class="viewer-nav right" onclick="viewerNav(1)">›</button>
+    </div>
+    <p id="viewer-counter" class="viewer-counter"></p>
   </div>
 
-  <!-- Toast -->
   <div id="toasts"></div>
-
   <script src="app.js"></script>
 </body>
 </html>

@@ -1,198 +1,329 @@
-// ── State ──────────────────────────────────────────────────────────────────
-let currentInfId = null;
-let filter = 'all';
-let pollTimer = null;
+// ── Config types de contenu ───────────────────────────────────────────────
+const CONTENT_TYPES = {
+  instagram: { label: 'Instagram', icon: '◻', sub: 'Carousel 3–4 images', min: 3, max: 4, ratio: '4:5' },
+  tiktok:    { label: 'TikTok',    icon: '▶', sub: 'Carousel 2–6 images', min: 2, max: 6, ratio: '9:16' },
+  threads:   { label: 'Threads',   icon: '⊕', sub: 'Repost TikTok',       min: 2, max: 6, ratio: '9:16' },
+  histoire:  { label: 'Histoire',  icon: '◈', sub: 'Séquence narrative',  min: 4, max: 10, ratio: '9:16' },
+};
 
-// ── Boot ───────────────────────────────────────────────────────────────────
-document.addEventListener('DOMContentLoaded', () => loadInfluencers());
+// ── État ──────────────────────────────────────────────────────────────────
+let currentInfId   = null;
+let currentType    = null;
+let statusFilter   = 'all';
+let pollTimer      = null;
+let viewerImages   = [];
+let viewerIndex    = 0;
 
-// ── Influenceurs ───────────────────────────────────────────────────────────
+// ── Boot ──────────────────────────────────────────────────────────────────
+document.addEventListener('DOMContentLoaded', loadInfluencers);
+
+// ── Influenceurs ──────────────────────────────────────────────────────────
 async function loadInfluencers() {
   const list = await api('/api/influencers');
   const nav  = document.getElementById('inf-nav');
   nav.innerHTML = list.map(i => `
     <div class="inf-item ${i.id === currentInfId ? 'active' : ''}"
-         onclick="selectInf(${i.id})" data-id="${i.id}">
+         data-id="${i.id}" onclick="selectInfluencer(${i.id})">
       <div class="inf-item-dot">${i.name[0].toUpperCase()}</div>
       ${esc(i.name)}
     </div>
   `).join('');
 
-  if (list.length === 0) {
-    show('screen-empty');
-  } else if (!currentInfId) {
-    selectInf(list[0].id);
-  }
+  if (!list.length) { show('screen-empty'); return; }
+  if (!currentInfId) selectInfluencer(list[0].id);
 }
 
-async function selectInf(id) {
+async function selectInfluencer(id) {
   currentInfId = id;
+  currentType  = null;
+
   document.querySelectorAll('.inf-item').forEach(el =>
     el.classList.toggle('active', +el.dataset.id === id));
+  document.querySelectorAll('.gen-nav-item').forEach(b => b.classList.remove('active'));
 
   const inf = await api(`/api/influencers/${id}`);
-  document.getElementById('top-name').textContent = inf.name;
-  document.getElementById('top-sub').textContent  = [inf.handle, inf.niche].filter(Boolean).join(' · ');
   document.getElementById('top-avatar').textContent = inf.name[0].toUpperCase();
+  document.getElementById('top-name').textContent   = inf.name;
+  document.getElementById('top-sub').textContent    = [inf.handle, inf.niche].filter(Boolean).join(' · ');
 
+  document.getElementById('gen-section').style.display = 'block';
   show('screen-inf');
-  filter = 'all';
-  document.querySelectorAll('.filter').forEach((b, i) => b.classList.toggle('active', i === 0));
-  await loadGallery();
+  await loadInfluencerHome();
 }
 
-// ── Galerie ────────────────────────────────────────────────────────────────
-async function loadGallery() {
+async function loadInfluencerHome() {
   if (!currentInfId) return;
+
+  // Stats par type
+  const stats = await api(`/api/influencers/${currentInfId}/stats`);
+  const statsRow = document.getElementById('inf-stats');
+  statsRow.innerHTML = Object.entries(CONTENT_TYPES).map(([type, cfg]) => {
+    const s = stats[type] || { total: 0, done: 0 };
+    return `
+      <div class="stat-card" onclick="selectContentType('${type}')">
+        <div class="stat-type">
+          <span class="stat-dot ${type}"></span>${cfg.label}
+        </div>
+        <div class="stat-number">${s.total || 0}</div>
+        <div class="stat-label">posts générés</div>
+      </div>
+    `;
+  }).join('');
+
+  // Dernières générations (tous types)
+  const posts = await api(`/api/influencers/${currentInfId}/posts?limit=8`);
+  const grid  = document.getElementById('recent-grid');
+  const empty = document.getElementById('recent-empty');
+
+  if (!posts.length) {
+    grid.innerHTML = '';
+    empty.style.display = 'block';
+    return;
+  }
+  empty.style.display = 'none';
+  grid.innerHTML = posts.flatMap(p => (p.image_urls || []).slice(0, 1)).filter(Boolean).map(url => `
+    <div style="border-radius:10px;overflow:hidden;background:#fff;border:1px solid var(--border)">
+      <img src="${url}" style="width:100%;aspect-ratio:9/16;object-fit:cover;display:block;cursor:zoom-in"
+           onclick="openViewer(['${url}'], 0)" loading="lazy" />
+    </div>
+  `).join('');
+}
+
+// ── Type de contenu ───────────────────────────────────────────────────────
+function selectContentType(type) {
+  currentType  = type;
+  statusFilter = 'all';
+
+  document.querySelectorAll('.gen-nav-item').forEach(b =>
+    b.classList.toggle('active', b.dataset.type === type));
+  document.querySelectorAll('.inf-item').forEach(b => b.classList.remove('active'));
+
+  const cfg = CONTENT_TYPES[type];
+  const badge = document.getElementById('ct-badge');
+  badge.className = `content-type-badge ${type}`;
+  badge.textContent = cfg.icon;
+  document.getElementById('ct-title').textContent = cfg.label;
+  document.getElementById('ct-sub').textContent   = cfg.sub + ' · ' + cfg.ratio;
+
+  document.querySelectorAll('.filter').forEach((b, i) => b.classList.toggle('active', i === 0));
+  show('screen-gen');
+  loadPosts();
+}
+
+// ── Posts ─────────────────────────────────────────────────────────────────
+async function loadPosts() {
+  if (!currentInfId || !currentType) return;
   clearInterval(pollTimer);
 
-  const q = filter !== 'all' ? `?status=${filter}` : '';
-  const gens = await api(`/api/influencers/${currentInfId}/generations${q}`);
+  const q = statusFilter !== 'all' ? `&status=${statusFilter}` : '';
+  const posts = await api(`/api/influencers/${currentInfId}/posts?content_type=${currentType}${q}`);
 
-  const grid  = document.getElementById('gallery');
-  const empty = document.getElementById('gallery-empty');
+  const grid  = document.getElementById('posts-grid');
+  const empty = document.getElementById('posts-empty');
 
-  if (gens.length === 0) {
+  if (!posts.length) {
     grid.innerHTML = '';
     empty.style.display = 'flex';
-  } else {
-    empty.style.display = 'none';
-    grid.innerHTML = gens.map(renderCard).join('');
+    return;
   }
+  empty.style.display = 'none';
+  grid.innerHTML = posts.map(renderPost).join('');
 
-  const hasPending = gens.some(g => g.status === 'pending' || g.status === 'generating');
-  if (hasPending) {
-    pollTimer = setInterval(loadGallery, 6000);
-  }
+  const hasPending = posts.some(p => p.status === 'pending' || p.status === 'generating');
+  if (hasPending) pollTimer = setInterval(loadPosts, 6000);
 }
 
-function renderCard(g) {
-  const imgs = g.image_urls || [];
+function renderPost(p) {
+  const imgs  = p.image_urls || [];
+  const cfg   = CONTENT_TYPES[p.content_type] || {};
+  const isSquare = p.content_type === 'instagram';
+  const imgClass = isSquare ? 'post-img-sq' : 'post-img';
+  const allUrls  = JSON.stringify(imgs).replace(/"/g, '&quot;');
 
-  if (g.status === 'done' && imgs.length) {
-    return imgs.map(url => `
-      <div class="card">
-        <img class="card-img" src="${url}" loading="lazy"
-             onclick="viewImg('${url}')" />
-        <div class="card-body">
-          <div class="card-prompt" title="${esc(g.prompt)}">${esc(g.prompt)}</div>
-          <span class="badge badge-done">Terminé</span>
-        </div>
-      </div>
-    `).join('');
+  let imagesHtml;
+  if (p.status === 'done' && imgs.length) {
+    imagesHtml = `<div class="post-images">
+      ${imgs.map((url, i) => `
+        <img class="${imgClass}" src="${url}" loading="lazy"
+             onclick='openViewer(${allUrls}, ${i})' />
+      `).join('')}
+    </div>`;
+  } else {
+    const info = {
+      generating: ['badge-gen', '<div class="spin"></div>', 'Génération en cours…'],
+      pending:    ['badge-pend', '', 'En attente…'],
+      failed:     ['badge-fail', '✕', 'Échec'],
+    }[p.status] || ['badge-pend', '', '—'];
+    imagesHtml = `<div class="post-placeholder">${info[1]}<span>${info[2]}</span></div>`;
   }
 
-  const info = {
-    generating: ['badge-gen',  '<div class="spin"></div>', 'Génération…'],
-    pending:    ['badge-pending','○',                       'En attente'],
-    failed:     ['badge-fail', '✕',                        'Échec'],
-  }[g.status] || ['badge-pending','○','—'];
+  const badge = {
+    done:       `<span class="badge badge-done">✓ Terminé</span>`,
+    generating: `<span class="badge badge-gen"><div class="spin"></div> En cours</span>`,
+    pending:    `<span class="badge badge-pend">En attente</span>`,
+    failed:     `<span class="badge badge-fail">✕ Échec</span>`,
+  }[p.status] || '';
 
   return `
-    <div class="card">
-      <div class="card-placeholder">${info[1]}<span>${info[2]}</span></div>
-      <div class="card-body">
-        <div class="card-prompt" title="${esc(g.prompt)}">${esc(g.prompt)}</div>
-        <span class="badge ${info[0]}">${info[2]}</span>
+    <div class="post-card">
+      <div class="post-card-header">
+        <div class="post-card-prompt" title="${esc(p.prompt)}">${esc(p.prompt)}</div>
+        ${badge}
       </div>
-    </div>`;
+      ${imagesHtml}
+      <div class="post-card-date">${imgs.length} image${imgs.length !== 1 ? 's' : ''} · ${fmtDate(p.created_at)}</div>
+    </div>
+  `;
 }
 
 function setFilter(f, btn) {
-  filter = f;
+  statusFilter = f;
   document.querySelectorAll('.filter').forEach(b => b.classList.remove('active'));
   btn.classList.add('active');
-  loadGallery();
+  loadPosts();
 }
 
-// ── Ajouter influenceur ────────────────────────────────────────────────────
-async function submitAddInf(e) {
+// ── Modals génération ─────────────────────────────────────────────────────
+function openSingleModal() {
+  const cfg = CONTENT_TYPES[currentType];
+  document.getElementById('modal-type-header').textContent = cfg.label + ' · ' + cfg.sub;
+  document.getElementById('modal-single-title').textContent = 'Nouveau post ' + cfg.label;
+  document.getElementById('s-prompt').value = '';
+
+  // Remplir select count
+  const sel = document.getElementById('s-count');
+  sel.innerHTML = '';
+  for (let i = cfg.min; i <= cfg.max; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${i} image${i > 1 ? 's' : ''}`;
+    if (i === cfg.max) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  openModal('single');
+}
+
+async function submitSingle(e) {
   e.preventDefault();
-  await api('/api/influencers', 'POST', {
-    name:   document.getElementById('ai-name').value,
-    handle: document.getElementById('ai-handle').value || null,
-    niche:  document.getElementById('ai-niche').value  || null,
+  await api(`/api/influencers/${currentInfId}/posts`, 'POST', {
+    content_type: currentType,
+    prompt:       document.getElementById('s-prompt').value,
+    image_count:  +document.getElementById('s-count').value,
+    model:        document.getElementById('s-model').value,
   });
-  closeModal('add-inf');
+  closeModal('single');
   e.target.reset();
-  toast('Influenceur créé');
-  await loadInfluencers();
+  toast('Post en cours de génération');
+  loadPosts();
 }
 
-// ── Générer ────────────────────────────────────────────────────────────────
-async function submitGenerate(e) {
-  e.preventDefault();
-  await api(`/api/influencers/${currentInfId}/generations`, 'POST', {
-    prompt:       document.getElementById('g-prompt').value,
-    aspect_ratio: document.getElementById('g-ratio').value,
-    count:        +document.getElementById('g-count').value,
-    model:        document.getElementById('g-model').value,
-  });
-  closeModal('generate');
-  e.target.reset();
-  toast('Génération lancée');
-  await loadGallery();
+function openBulkModal() {
+  const cfg = CONTENT_TYPES[currentType];
+  document.getElementById('modal-bulk-type-header').textContent = cfg.label + ' · ' + cfg.sub;
+  document.getElementById('modal-bulk-title').textContent = 'Génération en masse — ' + cfg.label;
+  document.getElementById('b-prompts').value = '';
+  document.getElementById('b-count').textContent = '0 posts';
+
+  const sel = document.getElementById('b-count-img');
+  sel.innerHTML = '';
+  for (let i = cfg.min; i <= cfg.max; i++) {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = `${i} image${i > 1 ? 's' : ''} / post`;
+    if (i === cfg.max) opt.selected = true;
+    sel.appendChild(opt);
+  }
+  openModal('bulk');
 }
 
-// ── Bulk ───────────────────────────────────────────────────────────────────
-function countPrompts() {
-  const n = getPrompts().length;
-  document.getElementById('b-count').textContent = `${n} prompt${n !== 1 ? 's' : ''}`;
+function countBulkPrompts() {
+  const n = getBulkPrompts().length;
+  document.getElementById('b-count').textContent = `${n} post${n !== 1 ? 's' : ''}`;
 }
 
-function getPrompts() {
+function getBulkPrompts() {
   return document.getElementById('b-prompts').value
     .split('\n').map(l => l.trim()).filter(Boolean);
 }
 
 async function submitBulk(e) {
   e.preventDefault();
-  const prompts = getPrompts();
+  const prompts = getBulkPrompts();
   if (!prompts.length) { toast('Ajoute au moins un prompt', true); return; }
 
-  const btn = document.getElementById('bulk-submit');
+  const btn = document.getElementById('bulk-submit-btn');
   btn.disabled = true; btn.textContent = 'Lancement…';
 
   try {
-    await api(`/api/influencers/${currentInfId}/bulk`, 'POST', {
+    await api(`/api/influencers/${currentInfId}/posts/bulk`, 'POST', {
+      content_type: currentType,
       prompts,
-      aspect_ratio: document.getElementById('b-ratio').value,
-      count:        +document.getElementById('b-count-per').value,
-      model:        document.getElementById('b-model').value,
+      image_count: +document.getElementById('b-count-img').value,
+      model:       document.getElementById('b-model').value,
     });
     closeModal('bulk');
     e.target.reset();
-    document.getElementById('b-count').textContent = '0 prompts';
-    toast(`${prompts.length} générations lancées`);
-    await loadGallery();
+    document.getElementById('b-count').textContent = '0 posts';
+    toast(`${prompts.length} posts lancés`);
+    loadPosts();
   } finally {
     btn.disabled = false; btn.textContent = 'Lancer';
   }
 }
 
-// ── Viewer ─────────────────────────────────────────────────────────────────
-function viewImg(url) {
-  document.getElementById('viewer-img').src = url;
+// ── Ajouter influenceur ───────────────────────────────────────────────────
+async function submitAddInf(e) {
+  e.preventDefault();
+  const inf = await api('/api/influencers', 'POST', {
+    name:        document.getElementById('ai-name').value,
+    handle:      document.getElementById('ai-handle').value || null,
+    niche:       document.getElementById('ai-niche').value  || null,
+    style_notes: document.getElementById('ai-style').value  || null,
+  });
+  closeModal('add-inf');
+  e.target.reset();
+  toast(`Influenceur "${inf.name}" créé`);
+  await loadInfluencers();
+  selectInfluencer(inf.id);
+}
+
+// ── Viewer ────────────────────────────────────────────────────────────────
+function openViewer(urls, index) {
+  viewerImages = typeof urls === 'string' ? JSON.parse(urls) : urls;
+  viewerIndex  = index;
+  updateViewer();
   openModal('viewer');
 }
 
-// ── Modals ─────────────────────────────────────────────────────────────────
-function openModal(name) {
-  document.getElementById(`modal-${name}`).classList.add('open');
+function updateViewer() {
+  document.getElementById('viewer-img').src = viewerImages[viewerIndex];
+  document.getElementById('viewer-counter').textContent =
+    viewerImages.length > 1 ? `${viewerIndex + 1} / ${viewerImages.length}` : '';
 }
-function closeModal(name) {
-  document.getElementById(`modal-${name}`).classList.remove('open');
+
+function viewerNav(dir) {
+  viewerIndex = (viewerIndex + dir + viewerImages.length) % viewerImages.length;
+  updateViewer();
 }
+
+// ── Modals ────────────────────────────────────────────────────────────────
+function openModal(name)  { document.getElementById(`modal-${name}`).classList.add('open'); }
+function closeModal(name) { document.getElementById(`modal-${name}`).classList.remove('open'); }
 
 document.addEventListener('keydown', e => {
-  if (e.key === 'Escape')
-    document.querySelectorAll('.overlay.open').forEach(m => m.classList.remove('open'));
+  if (e.key === 'Escape') document.querySelectorAll('.overlay.open').forEach(m => m.classList.remove('open'));
+  if (e.key === 'ArrowLeft')  viewerNav(-1);
+  if (e.key === 'ArrowRight') viewerNav(1);
 });
 
-// ── Helpers ────────────────────────────────────────────────────────────────
+// ── Helpers ───────────────────────────────────────────────────────────────
 function show(id) {
   document.querySelectorAll('.screen').forEach(s => s.style.display = 'none');
   document.getElementById(id).style.display = 'block';
+}
+
+function fmtDate(dt) {
+  return new Date(dt).toLocaleDateString('fr-FR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
 }
 
 function toast(msg, err = false) {
@@ -211,7 +342,7 @@ async function api(path, method = 'GET', body = null) {
   });
   if (r.status === 204) return null;
   const data = await r.json();
-  if (!r.ok) throw Object.assign(new Error(data.detail || 'Erreur'), { data });
+  if (!r.ok) throw new Error(data.detail || 'Erreur');
   return data;
 }
 
