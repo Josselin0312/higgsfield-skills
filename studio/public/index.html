@@ -1,0 +1,792 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Influencer Content Studio</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg:       #09090f;
+      --card:     #111120;
+      --card2:    #16162a;
+      --border:   #1e1e38;
+      --border2:  #2a2a4a;
+      --purple:   #7c3aed;
+      --blue:     #2563eb;
+      --grad:     linear-gradient(135deg, #7c3aed, #2563eb);
+      --text:     #ededf5;
+      --muted:    #6b6b8a;
+      --success:  #10b981;
+      --warn:     #f59e0b;
+      --danger:   #ef4444;
+    }
+
+    body {
+      font-family: 'Inter', sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      min-height: 100vh;
+    }
+
+    /* ── Header ── */
+    .header {
+      background: var(--card);
+      border-bottom: 1px solid var(--border);
+      padding: 0 32px;
+      height: 60px;
+      display: flex;
+      align-items: center;
+      gap: 14px;
+      position: sticky;
+      top: 0;
+      z-index: 50;
+    }
+    .logo {
+      width: 34px; height: 34px;
+      background: var(--grad);
+      border-radius: 9px;
+      display: grid;
+      place-items: center;
+      font-size: 17px;
+      flex-shrink: 0;
+    }
+    .header-title { font-size: 16px; font-weight: 600; }
+    .header-sub   { font-size: 12px; color: var(--muted); margin-left: 4px; }
+    .header-right { margin-left: auto; display: flex; align-items: center; gap: 10px; }
+    .badge-connected {
+      background: #0d2d1a; border: 1px solid var(--success);
+      color: var(--success); border-radius: 20px;
+      padding: 4px 12px; font-size: 12px; font-weight: 500;
+    }
+    .badge-disconnected {
+      background: #1a0d0d; border: 1px solid var(--danger);
+      color: var(--danger); border-radius: 20px;
+      padding: 4px 12px; font-size: 12px; font-weight: 500;
+    }
+
+    /* ── Layout ── */
+    .container { max-width: 1100px; margin: 0 auto; padding: 32px 24px 80px; }
+
+    /* ── API Settings ── */
+    .api-bar {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      margin-bottom: 28px;
+    }
+    .api-bar-label { font-size: 13px; color: var(--muted); white-space: nowrap; }
+    .api-input {
+      background: var(--bg);
+      border: 1px solid var(--border2);
+      border-radius: 8px;
+      color: var(--text);
+      padding: 7px 12px;
+      font-size: 13px;
+      font-family: inherit;
+      transition: border-color .2s;
+    }
+    .api-input:focus { outline: none; border-color: var(--purple); }
+    #apiKeyId     { width: 170px; }
+    #apiKeySecret { width: 230px; }
+
+    /* ── Buttons ── */
+    .btn {
+      border: none; cursor: pointer; font-family: inherit;
+      border-radius: 9px; font-weight: 500; transition: all .2s;
+      display: inline-flex; align-items: center; gap: 6px;
+    }
+    .btn-primary {
+      background: var(--grad); color: #fff;
+      padding: 8px 18px; font-size: 13px;
+    }
+    .btn-primary:hover { transform: translateY(-1px); box-shadow: 0 6px 20px rgba(124,58,237,.4); }
+    .btn-ghost {
+      background: var(--card2); border: 1px solid var(--border2);
+      color: var(--text); padding: 7px 14px; font-size: 12px;
+    }
+    .btn-ghost:hover { border-color: var(--purple); }
+
+    /* ── Grid layout ── */
+    .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+    .col-full { grid-column: 1 / -1; }
+
+    /* ── Cards ── */
+    .card {
+      background: var(--card);
+      border: 1px solid var(--border);
+      border-radius: 16px;
+      padding: 24px;
+    }
+    .card-header {
+      display: flex; align-items: flex-start; gap: 12px;
+      margin-bottom: 20px;
+    }
+    .step-badge {
+      width: 30px; height: 30px; flex-shrink: 0;
+      background: var(--grad);
+      border-radius: 50%;
+      display: grid; place-items: center;
+      font-size: 13px; font-weight: 700; color: #fff;
+    }
+    .card-title    { font-size: 15px; font-weight: 600; line-height: 1.3; }
+    .card-subtitle { font-size: 12px; color: var(--muted); margin-top: 3px; }
+
+    /* ── Upload zones ── */
+    .upload-row { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+    .upload-zone {
+      border: 2px dashed var(--border2);
+      border-radius: 12px;
+      min-height: 130px;
+      display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      text-align: center; padding: 16px;
+      cursor: pointer; position: relative;
+      transition: all .2s; gap: 6px;
+    }
+    .upload-zone input[type="file"] {
+      position: absolute; inset: 0; opacity: 0; cursor: pointer; width: 100%;
+    }
+    .upload-zone:hover  { border-color: var(--purple); background: rgba(124,58,237,.05); }
+    .upload-zone.filled { border-style: solid; border-color: var(--purple); }
+    .upload-zone .uz-icon  { font-size: 26px; }
+    .upload-zone .uz-label { font-size: 13px; font-weight: 500; }
+    .upload-zone .uz-hint  { font-size: 11px; color: var(--muted); }
+    .upload-zone img {
+      width: 100%; height: 110px; object-fit: cover;
+      border-radius: 8px; margin-bottom: 4px;
+    }
+    .upload-zone .uz-spin  {
+      width: 20px; height: 20px;
+      border: 2px solid var(--border2); border-top-color: var(--purple);
+      border-radius: 50%; animation: spin .7s linear infinite;
+    }
+    .status-line { font-size: 12px; margin-top: 10px; }
+    .status-line.ok     { color: var(--success); }
+    .status-line.warn   { color: var(--warn); }
+
+    /* ── Reference zone (taller) ── */
+    .upload-zone.big { min-height: 150px; }
+
+    /* ── Notes textarea ── */
+    .field-label { font-size: 12px; color: var(--muted); font-weight: 500; margin-bottom: 6px; display: block; }
+    .notes-input {
+      width: 100%; min-height: 78px; resize: vertical;
+      background: var(--bg); border: 1px solid var(--border2);
+      border-radius: 9px; color: var(--text);
+      padding: 10px 12px; font-size: 13px; font-family: inherit;
+      transition: border-color .2s;
+    }
+    .notes-input:focus { outline: none; border-color: var(--purple); }
+
+    /* ── Platform selector ── */
+    .platform-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin-bottom: 20px; }
+    .plat-btn {
+      background: var(--bg); border: 1.5px solid var(--border2);
+      border-radius: 11px; padding: 12px 8px; cursor: pointer;
+      text-align: center; transition: all .2s; color: var(--text);
+      font-family: inherit;
+    }
+    .plat-btn:hover  { border-color: var(--purple); }
+    .plat-btn.active { border-color: var(--purple); background: rgba(124,58,237,.12); }
+    .plat-icon { font-size: 22px; margin-bottom: 4px; }
+    .plat-name { font-size: 12px; font-weight: 600; }
+    .plat-ratio{ font-size: 10px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Count slider ── */
+    .slider-row { display: flex; align-items: center; gap: 12px; }
+    input[type="range"] {
+      flex: 1; accent-color: var(--purple); height: 4px;
+      -webkit-appearance: none; appearance: none;
+      background: var(--border2); border-radius: 4px; cursor: pointer;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 18px; height: 18px;
+      border-radius: 50%; background: var(--purple); cursor: pointer;
+      box-shadow: 0 0 0 3px rgba(124,58,237,.25);
+    }
+    .slider-val { font-size: 20px; font-weight: 700; color: var(--purple); min-width: 36px; text-align: center; }
+    .slider-end { font-size: 12px; color: var(--muted); }
+
+    /* ── Model + quality toggles ── */
+    .toggle-row { display: flex; gap: 8px; flex-wrap: wrap; }
+    .toggle-btn {
+      background: var(--bg); border: 1.5px solid var(--border2);
+      border-radius: 9px; padding: 8px 14px; cursor: pointer;
+      font-size: 12px; font-family: inherit; color: var(--text); transition: all .2s;
+      font-weight: 500;
+    }
+    .toggle-btn:hover  { border-color: var(--purple); }
+    .toggle-btn.active { border-color: var(--purple); background: rgba(124,58,237,.12); color: #c4b5fd; }
+    .toggle-label { font-size: 11px; color: var(--muted); margin-top: 2px; }
+
+    /* ── Divider ── */
+    .divider { border: none; border-top: 1px solid var(--border); margin: 20px 0; }
+
+    /* ── Generate button ── */
+    .btn-generate {
+      width: 100%; padding: 17px;
+      background: var(--grad); color: #fff;
+      border: none; border-radius: 14px;
+      font-size: 16px; font-weight: 600;
+      cursor: pointer; font-family: inherit;
+      display: flex; align-items: center; justify-content: center; gap: 10px;
+      transition: all .2s; margin-top: 24px;
+      box-shadow: 0 4px 30px rgba(124,58,237,.3);
+    }
+    .btn-generate:hover:not(:disabled) { transform: translateY(-2px); box-shadow: 0 8px 35px rgba(124,58,237,.5); }
+    .btn-generate:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    /* ── Results ── */
+    .results-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-top: 36px; margin-bottom: 16px;
+    }
+    .results-title { font-size: 16px; font-weight: 600; }
+    .progress-badge {
+      display: inline-flex; align-items: center; gap: 7px;
+      padding: 5px 14px; border-radius: 20px; font-size: 12px; font-weight: 500;
+    }
+    .progress-badge.running { background: rgba(124,58,237,.15); color: #c4b5fd; border: 1px solid rgba(124,58,237,.3); }
+    .progress-badge.done    { background: rgba(16,185,129,.12); color: var(--success); border: 1px solid rgba(16,185,129,.3); }
+    .progress-badge.idle    { background: var(--card); color: var(--muted); border: 1px solid var(--border); }
+    .pulse { width: 7px; height: 7px; border-radius: 50%; background: currentColor; animation: pulse 1s ease-in-out infinite; }
+
+    .results-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); gap: 14px; }
+
+    /* Skeleton */
+    .skeleton-card {
+      border-radius: 12px; overflow: hidden;
+      background: linear-gradient(90deg, var(--card2) 25%, var(--border) 50%, var(--card2) 75%);
+      background-size: 200% 100%;
+      animation: shimmer 1.6s ease-in-out infinite;
+    }
+    .skeleton-card .sk-img  { aspect-ratio: 4/5; width: 100%; }
+    .skeleton-card .sk-bar  { height: 36px; margin: 8px; border-radius: 6px; background: rgba(255,255,255,.04); }
+
+    /* Result card */
+    .result-card {
+      background: var(--card); border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden;
+      transition: transform .2s, box-shadow .2s;
+    }
+    .result-card:hover { transform: translateY(-3px); box-shadow: 0 10px 30px rgba(0,0,0,.5); }
+    .result-card img { width: 100%; display: block; }
+    .result-footer { padding: 8px; display: flex; gap: 6px; }
+    .btn-dl {
+      flex: 1; background: var(--card2); border: 1px solid var(--border2);
+      border-radius: 7px; color: var(--text); padding: 7px;
+      font-size: 12px; cursor: pointer; font-family: inherit;
+      transition: all .2s; text-align: center;
+    }
+    .btn-dl:hover { border-color: var(--purple); color: #c4b5fd; }
+    .result-error {
+      aspect-ratio: 4/5; display: flex; flex-direction: column;
+      align-items: center; justify-content: center;
+      color: var(--danger); font-size: 12px; gap: 6px;
+      background: rgba(239,68,68,.06);
+    }
+
+    /* ── Toast ── */
+    .toast {
+      position: fixed; bottom: 24px; right: 24px; z-index: 200;
+      background: var(--card2); border: 1px solid var(--border2);
+      border-radius: 10px; padding: 11px 18px; font-size: 13px;
+      opacity: 0; transform: translateY(10px);
+      transition: all .3s; pointer-events: none;
+    }
+    .toast.show  { opacity: 1; transform: translateY(0); }
+    .toast.ok    { border-color: var(--success); color: var(--success); }
+    .toast.error { border-color: var(--danger);  color: var(--danger);  }
+    .toast.info  { border-color: var(--purple);  color: #c4b5fd; }
+
+    /* ── Animations ── */
+    @keyframes shimmer { 0%{background-position:200% 0} 100%{background-position:-200% 0} }
+    @keyframes spin    { to { transform: rotate(360deg); } }
+    @keyframes pulse   { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes fadeIn  { from{opacity:0;transform:translateY(8px)} to{opacity:1;transform:translateY(0)} }
+    .fade-in { animation: fadeIn .35s ease forwards; }
+
+    /* ── Responsive ── */
+    @media (max-width: 700px) {
+      .grid-2       { grid-template-columns: 1fr; }
+      .platform-row { grid-template-columns: repeat(2, 1fr); }
+      .upload-row   { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Header ────────────────────────────────────────────────────── -->
+<header class="header">
+  <div class="logo">✨</div>
+  <span class="header-title">Influencer Content Studio</span>
+  <span class="header-sub">by Higgsfield</span>
+  <div class="header-right">
+    <span id="connBadge" class="badge-disconnected">⚡ Non connecté</span>
+  </div>
+</header>
+
+<!-- ── Main ─────────────────────────────────────────────────────── -->
+<main class="container">
+
+  <!-- API Key Bar -->
+  <div class="api-bar">
+    <span style="font-size:18px">🔑</span>
+    <span class="api-bar-label">Clé Higgsfield :</span>
+    <input class="api-input" id="apiKeyId"     type="text"     placeholder="KEY_ID"     />
+    <input class="api-input" id="apiKeySecret" type="password" placeholder="KEY_SECRET" />
+    <button class="btn btn-primary" onclick="saveCredentials()">Connecter</button>
+    <button class="btn btn-ghost"   onclick="toggleKeyVisibility()" style="padding:7px 10px; font-size:15px;">👁</button>
+  </div>
+
+  <!-- Step cards grid -->
+  <div class="grid-2" style="margin-bottom: 20px;">
+
+    <!-- ── STEP 1 : Influenceur ── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="step-badge">1</div>
+        <div>
+          <div class="card-title">👤 Identité de l'influenceur</div>
+          <div class="card-subtitle">Chargé une fois — utilisé pour toute la session</div>
+        </div>
+      </div>
+
+      <div class="upload-row">
+        <div class="upload-zone" id="zone-face" onclick="triggerUpload('face')">
+          <input type="file" id="file-face" accept="image/*" onchange="handleFileSelect('face', this)" />
+          <div class="uz-icon">🙂</div>
+          <div class="uz-label">Visage</div>
+          <div class="uz-hint">Photo du visage seul</div>
+        </div>
+        <div class="upload-zone" id="zone-body" onclick="triggerUpload('body')">
+          <input type="file" id="file-body" accept="image/*" onchange="handleFileSelect('body', this)" />
+          <div class="uz-icon">🧍</div>
+          <div class="uz-label">Corps</div>
+          <div class="uz-hint">Photo corps entier</div>
+        </div>
+      </div>
+
+      <div id="influencer-status" class="status-line warn" style="margin-top:12px;">
+        ⚠️ Upload le visage et le corps
+      </div>
+    </div>
+
+    <!-- ── STEP 2 : Référence ── -->
+    <div class="card">
+      <div class="card-header">
+        <div class="step-badge">2</div>
+        <div>
+          <div class="card-title">📸 Image de référence</div>
+          <div class="card-subtitle">La photo que tu veux reproduire</div>
+        </div>
+      </div>
+
+      <div class="upload-zone big" id="zone-ref" onclick="triggerUpload('ref')" style="margin-bottom:14px;">
+        <input type="file" id="file-ref" accept="image/*" onchange="handleFileSelect('ref', this)" />
+        <div class="uz-icon">🖼️</div>
+        <div class="uz-label">Dépose ou clique pour choisir</div>
+        <div class="uz-hint">Screenshot Instagram, TikTok…</div>
+      </div>
+
+      <label class="field-label">✏️ Modifications souhaitées <span style="color:var(--purple)">(optionnel)</span></label>
+      <textarea class="notes-input" id="userNotes"
+        placeholder="Ex: garder le même sourire, changer la tenue en rouge, décor en extérieur…"></textarea>
+    </div>
+
+    <!-- ── STEP 3 : Format & réglages ── -->
+    <div class="card col-full">
+      <div class="card-header">
+        <div class="step-badge">3</div>
+        <div>
+          <div class="card-title">⚙️ Format & Quantité</div>
+          <div class="card-subtitle">Choisis la plateforme et le nombre d'images du carrousel</div>
+        </div>
+      </div>
+
+      <!-- Platform -->
+      <label class="field-label">📱 Plateforme</label>
+      <div class="platform-row">
+        <button class="plat-btn active" onclick="setPlatform(this,'4:5')">
+          <div class="plat-icon">📸</div>
+          <div class="plat-name">Instagram</div>
+          <div class="plat-ratio">Carrousel 4:5</div>
+        </button>
+        <button class="plat-btn" onclick="setPlatform(this,'9:16')">
+          <div class="plat-icon">🎵</div>
+          <div class="plat-name">TikTok / Réel</div>
+          <div class="plat-ratio">Vertical 9:16</div>
+        </button>
+        <button class="plat-btn" onclick="setPlatform(this,'1:1')">
+          <div class="plat-icon">🧵</div>
+          <div class="plat-name">Threads</div>
+          <div class="plat-ratio">Carré 1:1</div>
+        </button>
+        <button class="plat-btn" onclick="setPlatform(this,'16:9')">
+          <div class="plat-icon">▶️</div>
+          <div class="plat-name">YouTube</div>
+          <div class="plat-ratio">Paysage 16:9</div>
+        </button>
+      </div>
+
+      <!-- Count -->
+      <label class="field-label">🖼️ Nombre d'images</label>
+      <div class="slider-row" style="margin-bottom:20px;">
+        <span class="slider-end">1</span>
+        <input type="range" id="imgCount" min="1" max="20" value="5"
+               oninput="document.getElementById('countVal').textContent=this.value" />
+        <span class="slider-end">20</span>
+        <span class="slider-val" id="countVal">5</span>
+      </div>
+
+      <hr class="divider" />
+
+      <!-- Model -->
+      <label class="field-label">🤖 Modèle</label>
+      <div class="toggle-row" style="margin-bottom:18px;">
+        <button class="toggle-btn active" onclick="setModel(this,'nano_banana_2')"
+                title="Qualité maximale, 4K">💎 Nano Banana Pro</button>
+        <button class="toggle-btn" onclick="setModel(this,'nano_banana_flash')"
+                title="Rapide, bonne qualité">⚡ Nano Banana Flash</button>
+        <button class="toggle-btn" onclick="setModel(this,'soul_2')"
+                title="Idéal UGC / mode">👤 Soul 2.0</button>
+      </div>
+
+      <!-- Quality -->
+      <label class="field-label">🔬 Qualité</label>
+      <div class="toggle-row">
+        <button class="toggle-btn active" onclick="setQuality(this,'1k')">⚡ Rapide — 1K</button>
+        <button class="toggle-btn" onclick="setQuality(this,'2k')">✨ Standard — 2K</button>
+        <button class="toggle-btn" onclick="setQuality(this,'4k')">💎 Ultra — 4K</button>
+      </div>
+    </div>
+
+  </div><!-- /grid -->
+
+  <!-- ── Generate Button ── -->
+  <button class="btn-generate" id="generateBtn" onclick="generate()">
+    🚀 Générer le carrousel
+  </button>
+
+  <!-- ── Results ── -->
+  <div id="resultsSection" style="display:none;">
+    <div class="results-header">
+      <span class="results-title">Résultats</span>
+      <span class="progress-badge idle" id="progressBadge">En attente</span>
+    </div>
+    <div class="results-grid" id="resultsGrid"></div>
+  </div>
+
+</main>
+
+<!-- ── Toast ── -->
+<div class="toast" id="toast"></div>
+
+<!-- ── Scripts ── -->
+<script>
+  /* ── State ────────────────────────────────────────── */
+  let creds         = '';
+  let selectedRatio = '4:5';
+  let selectedModel = 'nano_banana_2';
+  let selectedQual  = '1k';
+  let mediaIds      = { face: null, body: null, ref: null };
+  let activeJobs    = [];
+  let pollingTimer  = null;
+
+  /* ── Init ─────────────────────────────────────────── */
+  window.onload = () => {
+    const saved = localStorage.getItem('hf_creds');
+    if (saved) {
+      const [k, s] = saved.split(':');
+      document.getElementById('apiKeyId').value     = k || '';
+      document.getElementById('apiKeySecret').value = s || '';
+      creds = saved;
+      updateConnBadge(true);
+    }
+  };
+
+  /* ── Credentials ──────────────────────────────────── */
+  function saveCredentials() {
+    const k = document.getElementById('apiKeyId').value.trim();
+    const s = document.getElementById('apiKeySecret').value.trim();
+    if (!k || !s) return toast('Entre les deux parties de ta clé Higgsfield', 'error');
+    creds = `${k}:${s}`;
+    localStorage.setItem('hf_creds', creds);
+    updateConnBadge(true);
+    toast('✓ Higgsfield connecté', 'ok');
+  }
+
+  function updateConnBadge(ok) {
+    const el = document.getElementById('connBadge');
+    el.textContent = ok ? '✓ Higgsfield connecté' : '⚡ Non connecté';
+    el.className   = ok ? 'badge-connected' : 'badge-disconnected';
+  }
+
+  function toggleKeyVisibility() {
+    const f = document.getElementById('apiKeySecret');
+    f.type = f.type === 'password' ? 'text' : 'password';
+  }
+
+  /* ── Platform / Model / Quality ──────────────────── */
+  function setPlatform(btn, ratio) {
+    btn.closest('.platform-row').querySelectorAll('.plat-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedRatio = ratio;
+  }
+  function setModel(btn, model) {
+    btn.closest('.toggle-row').querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedModel = model;
+  }
+  function setQuality(btn, q) {
+    btn.closest('.toggle-row').querySelectorAll('.toggle-btn').forEach(b => b.classList.remove('active'));
+    btn.classList.add('active');
+    selectedQual = q;
+  }
+
+  /* ── Upload ────────────────────────────────────────── */
+  function triggerUpload(type) {
+    document.getElementById(`file-${type}`).click();
+  }
+
+  async function handleFileSelect(type, input) {
+    if (!input.files[0]) return;
+    if (!creds) return toast('Connecte-toi d\'abord à Higgsfield 🔑', 'error');
+
+    const file = input.files[0];
+    const zone = document.getElementById(`zone-${type}`);
+
+    // Show preview immediately
+    const reader = new FileReader();
+    reader.onload = e => {
+      zone.innerHTML = '';
+      const img = document.createElement('img');
+      img.src = e.target.result;
+      const spin = document.createElement('div');
+      spin.className = 'uz-spin';
+      const hint = document.createElement('div');
+      hint.className = 'uz-hint';
+      hint.textContent = 'Upload en cours…';
+      zone.appendChild(img);
+      zone.appendChild(spin);
+      zone.appendChild(hint);
+      zone.classList.add('filled');
+      // Re-attach file input
+      const newInput = document.createElement('input');
+      newInput.type = 'file'; newInput.accept = 'image/*';
+      newInput.id = `file-${type}`;
+      newInput.style.cssText = 'position:absolute;inset:0;opacity:0;cursor:pointer;width:100%';
+      newInput.onchange = function() { handleFileSelect(type, this); };
+      zone.appendChild(newInput);
+    };
+    reader.readAsDataURL(file);
+
+    // Upload to backend → Higgsfield
+    const fd = new FormData();
+    fd.append('image', file);
+    fd.append('credentials', creds);
+
+    try {
+      const res  = await fetch('/api/upload', { method: 'POST', body: fd });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      mediaIds[type] = data.mediaId;
+      toast(`${type === 'face' ? 'Visage' : type === 'body' ? 'Corps' : 'Référence'} uploadé ✓`, 'ok');
+
+      // Remove spinner in zone
+      const spinner = zone.querySelector('.uz-spin');
+      if (spinner) spinner.remove();
+      const hint = zone.querySelector('.uz-hint');
+      if (hint) hint.textContent = '✓ Prêt';
+
+      updateInfluencerStatus();
+    } catch (err) {
+      toast(`Erreur upload: ${err.message}`, 'error');
+    }
+  }
+
+  function updateInfluencerStatus() {
+    const el = document.getElementById('influencer-status');
+    const { face, body } = mediaIds;
+    if (face && body) {
+      el.textContent = '✅ Identité prête';
+      el.className   = 'status-line ok';
+    } else {
+      const missing = [!face && 'visage', !body && 'corps'].filter(Boolean).join(' + ');
+      el.textContent = `⚠️ Manque : ${missing}`;
+      el.className   = 'status-line warn';
+    }
+  }
+
+  /* ── Build conservation prompt ────────────────────── */
+  function buildPrompt() {
+    const notes = document.getElementById('userNotes').value.trim();
+    const base  = 'Use the provided images strictly as a reference for the same model (identity, face, body proportions, hair color). The things you need to change are listed here';
+    return notes
+      ? `${base}: ${notes}`
+      : `${base}: keep the same pose, outfit, setting and lighting as the reference image`;
+  }
+
+  /* ── Generate ──────────────────────────────────────── */
+  async function generate() {
+    if (!creds)               return toast('Connecte-toi à Higgsfield d\'abord 🔑', 'error');
+    if (!mediaIds.face)       return toast('Upload la photo du visage', 'error');
+    if (!mediaIds.body)       return toast('Upload la photo du corps', 'error');
+
+    const count = parseInt(document.getElementById('imgCount').value);
+    const ids   = [mediaIds.face, mediaIds.body];
+    if (mediaIds.ref) ids.push(mediaIds.ref);
+
+    // Show skeletons
+    const section = document.getElementById('resultsSection');
+    const grid    = document.getElementById('resultsGrid');
+    section.style.display = 'block';
+    section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+    grid.innerHTML = Array.from({ length: count }, (_, i) => `
+      <div class="skeleton-card" id="sk-${i}">
+        <div class="sk-img"></div>
+        <div class="sk-bar"></div>
+      </div>`).join('');
+
+    setBadge('running', `0 / ${count} générées`);
+
+    const btn = document.getElementById('generateBtn');
+    btn.disabled   = true;
+    btn.textContent = '⏳ Génération en cours…';
+
+    try {
+      const res  = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          credentials: creds,
+          prompt:      buildPrompt(),
+          mediaIds:    ids,
+          aspectRatio: selectedRatio,
+          count,
+          model:       selectedModel,
+          resolution:  selectedQual,
+        }),
+      });
+      const data = await res.json();
+      if (data.error) throw new Error(data.error);
+
+      activeJobs = data.jobIds.map((id, i) => ({ id, index: i, done: false }));
+      startPolling(count);
+    } catch (err) {
+      toast(`Erreur : ${err.message}`, 'error');
+      btn.disabled    = false;
+      btn.textContent = '🚀 Générer le carrousel';
+    }
+  }
+
+  /* ── Polling ────────────────────────────────────────── */
+  function startPolling(total) {
+    let done = 0;
+
+    pollingTimer = setInterval(async () => {
+      const pending = activeJobs.filter(j => !j.done);
+      if (!pending.length) {
+        clearInterval(pollingTimer);
+        setBadge('done', `${total} images prêtes ✓`);
+        const btn = document.getElementById('generateBtn');
+        btn.disabled   = false;
+        btn.textContent = '🚀 Nouveau carrousel';
+        return;
+      }
+
+      try {
+        const res  = await fetch('/api/status', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ credentials: creds, jobIds: pending.map(j => j.id) }),
+        });
+        const data = await res.json();
+
+        for (const item of data.results || []) {
+          const job = activeJobs.find(j => j.id === item.jobId);
+          if (!job || job.done) continue;
+
+          if (item.status === 'completed' && item.url) {
+            job.done = true;
+            done++;
+            replaceWithImage(job.index, item.url, done);
+            setBadge('running', `${done} / ${total} générées`);
+          } else if (item.status === 'failed') {
+            job.done = true;
+            replaceWithError(job.index, item.error || 'Échec');
+          }
+        }
+      } catch (e) {
+        console.warn('Polling error:', e);
+      }
+    }, 3500);
+  }
+
+  function replaceWithImage(index, url, n) {
+    const sk = document.getElementById(`sk-${index}`);
+    if (!sk) return;
+    const card = document.createElement('div');
+    card.className = 'result-card fade-in';
+    card.innerHTML = `
+      <img src="${url}" alt="Image ${n}" loading="lazy" />
+      <div class="result-footer">
+        <button class="btn-dl" onclick="dlImage('${url}',${n})">⬇️ Télécharger</button>
+        <button class="btn-dl" onclick="window.open('${url}','_blank')" style="flex:0;padding:7px 10px;">🔗</button>
+      </div>`;
+    sk.replaceWith(card);
+  }
+
+  function replaceWithError(index, msg) {
+    const sk = document.getElementById(`sk-${index}`);
+    if (!sk) return;
+    const card = document.createElement('div');
+    card.className = 'result-card';
+    card.innerHTML = `<div class="result-error"><span style="font-size:22px">❌</span>${msg}</div>`;
+    sk.replaceWith(card);
+  }
+
+  /* ── Helpers ────────────────────────────────────────── */
+  function setBadge(state, text) {
+    const el = document.getElementById('progressBadge');
+    el.className = `progress-badge ${state}`;
+    el.innerHTML = state === 'running'
+      ? `<span class="pulse"></span>${text}`
+      : text;
+  }
+
+  async function dlImage(url, n) {
+    try {
+      const r    = await fetch(url);
+      const blob = await r.blob();
+      const a    = document.createElement('a');
+      a.href     = URL.createObjectURL(blob);
+      a.download = `carrousel-${n}.jpg`;
+      a.click();
+    } catch {
+      window.open(url, '_blank');
+    }
+  }
+
+  let toastTimer;
+  function toast(msg, type = '') {
+    const el     = document.getElementById('toast');
+    el.textContent = msg;
+    el.className   = `toast show ${type}`;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => el.classList.remove('show'), 3200);
+  }
+</script>
+</body>
+</html>
