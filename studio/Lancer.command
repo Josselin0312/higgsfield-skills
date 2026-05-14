@@ -6,6 +6,9 @@
 
 cd "$(dirname "$0")"
 
+# Supprime le flag de quarantaine macOS (téléchargement depuis internet)
+xattr -cr . 2>/dev/null || true
+
 echo ""
 echo "  ✨ Influencer Content Studio"
 echo "  ─────────────────────────────"
