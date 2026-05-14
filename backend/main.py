@@ -35,7 +35,8 @@ app = FastAPI(title="Higgsfield Studio", lifespan=lifespan)
 app.add_middleware(CORSMiddleware, allow_origins=["*"], allow_methods=["*"], allow_headers=["*"])
 
 FRONTEND = os.path.join(os.path.dirname(__file__), "..", "frontend")
-UPLOADS  = os.path.join(os.path.dirname(__file__), "..", "uploads")
+DATA_DIR = os.path.expanduser("~/.higgsfield")
+UPLOADS  = os.path.join(DATA_DIR, "uploads")
 os.makedirs(UPLOADS, exist_ok=True)
 
 

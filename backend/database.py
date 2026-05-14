@@ -1,7 +1,10 @@
 import aiosqlite
 import os
 
-DB_PATH = os.path.join(os.path.dirname(__file__), "data.db")
+# Stockage permanent en dehors du dossier projet → survit aux mises à jour
+DATA_DIR = os.path.expanduser("~/.higgsfield")
+os.makedirs(DATA_DIR, exist_ok=True)
+DB_PATH = os.path.join(DATA_DIR, "data.db")
 
 
 async def get_db():

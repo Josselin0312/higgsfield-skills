@@ -1,6 +1,8 @@
 #!/bin/bash
 
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
+DATA_DIR="$HOME/.higgsfield"
+mkdir -p "$DATA_DIR/uploads"
 
 # ── Vérifie Python ────────────────────────────────────────────────────────────
 PYTHON=""
@@ -27,20 +29,24 @@ AS
   printf "HIGGSFIELD_API_KEY=%s\nHIGGSFIELD_API_URL=https://api.higgsfield.ai\n" "$KEY" > "$ROOT/.env"
 fi
 
+# ── Mise à jour automatique (git pull silencieux) ─────────────────────────────
+cd "$ROOT"
+git pull --quiet origin claude/image-generator-influencer-tool-i7V2e 2>/dev/null || true
+
 # ── Installe les dépendances dans un venv dédié ───────────────────────────────
 VENV="$ROOT/.venv"
 if [ ! -d "$VENV" ]; then
   osascript -e 'display notification "Installation en cours (1 minute)..." with title "Higgsfield Studio"'
   "$PYTHON" -m venv "$VENV"
 fi
-
 "$VENV/bin/pip" install -q --upgrade pip 2>/dev/null
 "$VENV/bin/pip" install -q fastapi uvicorn httpx python-dotenv aiosqlite python-multipart 2>/dev/null
 
 # ── Tue un éventuel ancien serveur sur le port 8000 ──────────────────────────
 lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+sleep 1
 
-# ── Lance le serveur en arrière-plan ─────────────────────────────────────────
+# ── Lance le serveur ──────────────────────────────────────────────────────────
 cd "$ROOT/backend"
 "$VENV/bin/uvicorn" main:app --host 127.0.0.1 --port 8000 &
 SERVER_PID=$!
@@ -53,11 +59,7 @@ for i in $(seq 1 15); do
   fi
 done
 
-# ── Ouvre le navigateur ───────────────────────────────────────────────────────
 open http://localhost:8000
-
-# ── Notification ─────────────────────────────────────────────────────────────
 osascript -e 'display notification "Higgsfield Studio est lancé" with title "✓ Prêt"'
 
-# ── Garde le processus vivant ─────────────────────────────────────────────────
 wait $SERVER_PID
