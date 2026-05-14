@@ -1,29 +1,63 @@
 #!/bin/bash
 
-# Dossier racine du projet (parent du .app)
 ROOT="$(cd "$(dirname "$0")/../../.." && pwd)"
-cd "$ROOT"
 
-# ── Clé API : demande si absente ──────────────────────────────────────────────
+# ── Vérifie Python ────────────────────────────────────────────────────────────
+PYTHON=""
+for cmd in python3 python3.12 python3.11 python3.10 python3.9; do
+  if command -v "$cmd" &>/dev/null; then
+    PYTHON="$cmd"
+    break
+  fi
+done
+
+if [ -z "$PYTHON" ]; then
+  osascript -e 'display alert "Python introuvable" message "Installe Python 3 depuis python.org puis relance." buttons {"OK"}'
+  exit 1
+fi
+
+# ── Clé API au premier lancement ─────────────────────────────────────────────
 if [ ! -f "$ROOT/.env" ]; then
-  KEY=$(osascript <<'APPLESCRIPT'
-    set response to display dialog "Entre ta clé API Higgsfield :" ¬
-      default answer "" ¬
-      with title "Higgsfield Studio — Premier lancement" ¬
-      buttons {"Annuler", "OK"} default button "OK"
-    return text returned of response
-APPLESCRIPT
+  KEY=$(osascript <<'AS'
+    set r to display dialog "Entre ta clé API Higgsfield :" default answer "" with title "Higgsfield Studio" buttons {"OK"} default button "OK"
+    return text returned of r
+AS
   )
-  if [ -z "$KEY" ]; then exit 0; fi
+  [ -z "$KEY" ] && exit 0
   printf "HIGGSFIELD_API_KEY=%s\nHIGGSFIELD_API_URL=https://api.higgsfield.ai\n" "$KEY" > "$ROOT/.env"
 fi
 
-# ── Dépendances ───────────────────────────────────────────────────────────────
-python3 -m pip install -q fastapi uvicorn httpx python-dotenv aiosqlite python-multipart 2>/dev/null
+# ── Installe les dépendances dans un venv dédié ───────────────────────────────
+VENV="$ROOT/.venv"
+if [ ! -d "$VENV" ]; then
+  osascript -e 'display notification "Installation en cours (1 minute)..." with title "Higgsfield Studio"'
+  "$PYTHON" -m venv "$VENV"
+fi
 
-# ── Ouvre le navigateur après 3 secondes ─────────────────────────────────────
-(sleep 3 && open http://localhost:8000) &
+"$VENV/bin/pip" install -q --upgrade pip 2>/dev/null
+"$VENV/bin/pip" install -q fastapi uvicorn httpx python-dotenv aiosqlite python-multipart 2>/dev/null
 
-# ── Lance le serveur ──────────────────────────────────────────────────────────
+# ── Tue un éventuel ancien serveur sur le port 8000 ──────────────────────────
+lsof -ti:8000 | xargs kill -9 2>/dev/null || true
+
+# ── Lance le serveur en arrière-plan ─────────────────────────────────────────
 cd "$ROOT/backend"
-python3 -m uvicorn main:app --host 127.0.0.1 --port 8000
+"$VENV/bin/uvicorn" main:app --host 127.0.0.1 --port 8000 &
+SERVER_PID=$!
+
+# ── Attend que le serveur soit prêt ──────────────────────────────────────────
+for i in $(seq 1 15); do
+  sleep 1
+  if curl -s http://127.0.0.1:8000 >/dev/null 2>&1; then
+    break
+  fi
+done
+
+# ── Ouvre le navigateur ───────────────────────────────────────────────────────
+open http://localhost:8000
+
+# ── Notification ─────────────────────────────────────────────────────────────
+osascript -e 'display notification "Higgsfield Studio est lancé" with title "✓ Prêt"'
+
+# ── Garde le processus vivant ─────────────────────────────────────────────────
+wait $SERVER_PID
