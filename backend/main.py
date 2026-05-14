@@ -1,21 +1,20 @@
 import json
 import asyncio
+import os
 from contextlib import asynccontextmanager
 from typing import Optional
 
 from fastapi import FastAPI, Depends, HTTPException, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
 from pydantic import BaseModel
 import aiosqlite
 
-from database import get_db, init_db
+from database import get_db, init_db, DB_PATH
 import higgsfield as hf
-import os
 
 from dotenv import load_dotenv
-load_dotenv()
+load_dotenv(os.path.join(os.path.dirname(__file__), "..", ".env"))
 
 
 @asynccontextmanager
@@ -24,7 +23,7 @@ async def lifespan(app: FastAPI):
     yield
 
 
-app = FastAPI(title="Influencer Image Generator", lifespan=lifespan)
+app = FastAPI(title="Higgsfield Studio", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -33,26 +32,22 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-FRONTEND_DIR = os.path.join(os.path.dirname(__file__), "..", "frontend")
+FRONTEND = os.path.join(os.path.dirname(__file__), "..", "frontend")
 
 
-# ── Pydantic schemas ──────────────────────────────────────────────────────────
+# ── Schemas ───────────────────────────────────────────────────────────────────
 
 class InfluencerCreate(BaseModel):
     name: str
     handle: Optional[str] = None
     niche: Optional[str] = None
     style_notes: Optional[str] = None
-    avatar_url: Optional[str] = None
-
 
 class InfluencerUpdate(BaseModel):
     name: Optional[str] = None
     handle: Optional[str] = None
     niche: Optional[str] = None
     style_notes: Optional[str] = None
-    avatar_url: Optional[str] = None
-
 
 class GenerationCreate(BaseModel):
     prompt: str
@@ -61,9 +56,7 @@ class GenerationCreate(BaseModel):
     count: int = 1
     medias: Optional[list] = None
 
-
-class BulkGenerationCreate(BaseModel):
-    name: Optional[str] = None
+class BulkCreate(BaseModel):
     prompts: list[str]
     model: str = "soul_2"
     aspect_ratio: str = "9:16"
@@ -71,80 +64,74 @@ class BulkGenerationCreate(BaseModel):
     medias: Optional[list] = None
 
 
-# ── Influencers ───────────────────────────────────────────────────────────────
+# ── Influenceurs ──────────────────────────────────────────────────────────────
 
 @app.get("/api/influencers")
 async def list_influencers(db: aiosqlite.Connection = Depends(get_db)):
     async with db.execute("""
         SELECT i.*,
-               COUNT(g.id) AS total_generations,
-               SUM(CASE WHEN g.status = 'done' THEN 1 ELSE 0 END) AS done_generations
+          COUNT(g.id) total_generations,
+          SUM(CASE WHEN g.status='done' THEN 1 ELSE 0 END) done_generations
         FROM influencers i
         LEFT JOIN generations g ON g.influencer_id = i.id
-        GROUP BY i.id
-        ORDER BY i.name
+        GROUP BY i.id ORDER BY i.name
     """) as cur:
-        rows = await cur.fetchall()
-    return [dict(r) for r in rows]
+        return [dict(r) for r in await cur.fetchall()]
 
 
 @app.post("/api/influencers", status_code=201)
 async def create_influencer(body: InfluencerCreate, db: aiosqlite.Connection = Depends(get_db)):
     try:
         async with db.execute(
-            "INSERT INTO influencers (name, handle, niche, style_notes, avatar_url) VALUES (?,?,?,?,?)",
-            (body.name, body.handle, body.niche, body.style_notes, body.avatar_url),
+            "INSERT INTO influencers (name, handle, niche, style_notes) VALUES (?,?,?,?)",
+            (body.name, body.handle, body.niche, body.style_notes),
         ) as cur:
-            influencer_id = cur.lastrowid
+            iid = cur.lastrowid
         await db.commit()
     except aiosqlite.IntegrityError:
-        raise HTTPException(409, "Un influenceur avec ce nom existe déjà")
-    async with db.execute("SELECT * FROM influencers WHERE id=?", (influencer_id,)) as cur:
-        row = await cur.fetchone()
-    return dict(row)
+        raise HTTPException(409, "Nom déjà utilisé")
+    async with db.execute("SELECT * FROM influencers WHERE id=?", (iid,)) as cur:
+        return dict(await cur.fetchone())
 
 
-@app.get("/api/influencers/{influencer_id}")
-async def get_influencer(influencer_id: int, db: aiosqlite.Connection = Depends(get_db)):
-    async with db.execute("SELECT * FROM influencers WHERE id=?", (influencer_id,)) as cur:
+@app.get("/api/influencers/{iid}")
+async def get_influencer(iid: int, db: aiosqlite.Connection = Depends(get_db)):
+    async with db.execute("SELECT * FROM influencers WHERE id=?", (iid,)) as cur:
         row = await cur.fetchone()
     if not row:
-        raise HTTPException(404, "Influenceur introuvable")
+        raise HTTPException(404, "Introuvable")
     return dict(row)
 
 
-@app.put("/api/influencers/{influencer_id}")
-async def update_influencer(influencer_id: int, body: InfluencerUpdate, db: aiosqlite.Connection = Depends(get_db)):
+@app.put("/api/influencers/{iid}")
+async def update_influencer(iid: int, body: InfluencerUpdate, db: aiosqlite.Connection = Depends(get_db)):
     fields = {k: v for k, v in body.model_dump().items() if v is not None}
     if not fields:
-        raise HTTPException(400, "Aucun champ à mettre à jour")
-    set_clause = ", ".join(f"{k}=?" for k in fields)
-    values = list(fields.values()) + [influencer_id]
-    await db.execute(f"UPDATE influencers SET {set_clause} WHERE id=?", values)
+        raise HTTPException(400, "Rien à mettre à jour")
+    clause = ", ".join(f"{k}=?" for k in fields)
+    await db.execute(f"UPDATE influencers SET {clause} WHERE id=?", [*fields.values(), iid])
     await db.commit()
-    async with db.execute("SELECT * FROM influencers WHERE id=?", (influencer_id,)) as cur:
-        row = await cur.fetchone()
-    return dict(row)
+    async with db.execute("SELECT * FROM influencers WHERE id=?", (iid,)) as cur:
+        return dict(await cur.fetchone())
 
 
-@app.delete("/api/influencers/{influencer_id}", status_code=204)
-async def delete_influencer(influencer_id: int, db: aiosqlite.Connection = Depends(get_db)):
-    await db.execute("DELETE FROM influencers WHERE id=?", (influencer_id,))
+@app.delete("/api/influencers/{iid}", status_code=204)
+async def delete_influencer(iid: int, db: aiosqlite.Connection = Depends(get_db)):
+    await db.execute("DELETE FROM influencers WHERE id=?", (iid,))
     await db.commit()
 
 
-# ── Generations ───────────────────────────────────────────────────────────────
+# ── Générations ───────────────────────────────────────────────────────────────
 
-@app.get("/api/influencers/{influencer_id}/generations")
+@app.get("/api/influencers/{iid}/generations")
 async def list_generations(
-    influencer_id: int,
+    iid: int,
     status: Optional[str] = None,
-    limit: int = 50,
+    limit: int = 100,
     offset: int = 0,
     db: aiosqlite.Connection = Depends(get_db),
 ):
-    where = "WHERE influencer_id=?"
-    params: list = [influencer_id]
+    where, params = "WHERE influencer_id=?", [iid]
     if status:
         where += " AND status=?"
         params.append(status)
@@ -161,43 +148,66 @@ async def list_generations(
     return result
 
 
-@app.post("/api/influencers/{influencer_id}/generations", status_code=201)
+@app.post("/api/influencers/{iid}/generations", status_code=201)
 async def create_generation(
-    influencer_id: int,
+    iid: int,
     body: GenerationCreate,
-    background_tasks: BackgroundTasks,
+    bg: BackgroundTasks,
     db: aiosqlite.Connection = Depends(get_db),
 ):
-    async with db.execute("SELECT id FROM influencers WHERE id=?", (influencer_id,)) as cur:
+    async with db.execute("SELECT id FROM influencers WHERE id=?", (iid,)) as cur:
         if not await cur.fetchone():
             raise HTTPException(404, "Influenceur introuvable")
-
     async with db.execute(
-        "INSERT INTO generations (influencer_id, prompt, model, aspect_ratio, count, status) VALUES (?,?,?,?,?,?)",
-        (influencer_id, body.prompt, body.model, body.aspect_ratio, body.count, "pending"),
+        "INSERT INTO generations (influencer_id, prompt, model, aspect_ratio, count) VALUES (?,?,?,?,?)",
+        (iid, body.prompt, body.model, body.aspect_ratio, body.count),
     ) as cur:
-        gen_id = cur.lastrowid
+        gid = cur.lastrowid
     await db.commit()
-
-    background_tasks.add_task(_run_generation, gen_id, body)
-    async with db.execute("SELECT * FROM generations WHERE id=?", (gen_id,)) as cur:
-        row = await cur.fetchone()
-    d = dict(row)
-    d["image_urls"] = json.loads(d["image_urls"] or "[]")
+    bg.add_task(_run, gid, body)
+    async with db.execute("SELECT * FROM generations WHERE id=?", (gid,)) as cur:
+        d = dict(await cur.fetchone())
+    d["image_urls"] = []
     return d
 
 
-async def _run_generation(gen_id: int, body: GenerationCreate):
-    async with aiosqlite.connect(hf.__file__.replace("higgsfield.py", "data.db").replace(
-        os.path.join(os.path.dirname(__file__), "higgsfield.py"),
-        os.path.join(os.path.dirname(__file__), "data.db"),
-    )) as db:
-        db.row_factory = aiosqlite.Row
-        # Fix path
-        db_path = os.path.join(os.path.dirname(__file__), "data.db")
+@app.post("/api/influencers/{iid}/bulk", status_code=201)
+async def bulk_generate(
+    iid: int,
+    body: BulkCreate,
+    bg: BackgroundTasks,
+    db: aiosqlite.Connection = Depends(get_db),
+):
+    async with db.execute("SELECT id FROM influencers WHERE id=?", (iid,)) as cur:
+        if not await cur.fetchone():
+            raise HTTPException(404, "Influenceur introuvable")
+    if not body.prompts:
+        raise HTTPException(400, "Aucun prompt")
 
-    async with aiosqlite.connect(db_path) as db:
-        db.row_factory = aiosqlite.Row
+    gids = []
+    for prompt in body.prompts:
+        async with db.execute(
+            "INSERT INTO generations (influencer_id, prompt, model, aspect_ratio, count) VALUES (?,?,?,?,?)",
+            (iid, prompt, body.model, body.aspect_ratio, body.count),
+        ) as cur:
+            gids.append(cur.lastrowid)
+    await db.commit()
+
+    for gid, prompt in zip(gids, body.prompts):
+        gen = GenerationCreate(
+            prompt=prompt, model=body.model,
+            aspect_ratio=body.aspect_ratio, count=body.count,
+            medias=body.medias,
+        )
+        bg.add_task(_run, gid, gen)
+
+    return {"total": len(gids), "generation_ids": gids}
+
+
+# ── Background task ───────────────────────────────────────────────────────────
+
+async def _run(gid: int, body: GenerationCreate):
+    async with aiosqlite.connect(DB_PATH) as db:
         try:
             result = await hf.generate_image(
                 prompt=body.prompt,
@@ -207,168 +217,41 @@ async def _run_generation(gen_id: int, body: GenerationCreate):
                 medias=body.medias,
             )
             job_id = result.get("job_id") or result.get("id") or result.get("generation_id")
-            await db.execute(
-                "UPDATE generations SET job_id=?, status=? WHERE id=?",
-                (job_id, "generating", gen_id),
-            )
-            await db.commit()
 
-            # Poll for completion (max 5 minutes)
             if job_id:
+                await db.execute("UPDATE generations SET job_id=?, status='generating' WHERE id=?", (job_id, gid))
+                await db.commit()
                 for _ in range(60):
                     await asyncio.sleep(5)
-                    status_data = await hf.get_generation_status(job_id)
-                    api_status = status_data.get("status", "")
-                    if api_status in ("completed", "done", "succeeded"):
-                        images = (
-                            status_data.get("images") or
-                            status_data.get("outputs") or
-                            status_data.get("results") or []
-                        )
-                        urls = [img.get("url") or img for img in images if img]
+                    data = await hf.get_generation_status(job_id)
+                    s = data.get("status", "")
+                    if s in ("completed", "done", "succeeded"):
+                        imgs = data.get("images") or data.get("outputs") or data.get("results") or []
+                        urls = [i.get("url") or i for i in imgs if i]
                         await db.execute(
                             "UPDATE generations SET status='done', image_urls=?, updated_at=datetime('now') WHERE id=?",
-                            (json.dumps(urls), gen_id),
+                            (json.dumps(urls), gid),
                         )
                         await db.commit()
                         return
-                    elif api_status in ("failed", "error"):
-                        err = status_data.get("error") or "Échec de génération"
-                        await db.execute(
-                            "UPDATE generations SET status='failed', error=?, updated_at=datetime('now') WHERE id=?",
-                            (err, gen_id),
-                        )
-                        await db.commit()
-                        return
+                    elif s in ("failed", "error"):
+                        raise Exception(data.get("error") or "Échec API")
             else:
-                # Synchronous response with images inline
-                images = result.get("images") or result.get("outputs") or []
-                urls = [img.get("url") or img for img in images if img]
+                imgs = result.get("images") or result.get("outputs") or []
+                urls = [i.get("url") or i for i in imgs if i]
                 await db.execute(
                     "UPDATE generations SET status='done', image_urls=?, updated_at=datetime('now') WHERE id=?",
-                    (json.dumps(urls), gen_id),
+                    (json.dumps(urls), gid),
                 )
                 await db.commit()
 
         except Exception as e:
-            async with aiosqlite.connect(os.path.join(os.path.dirname(__file__), "data.db")) as db2:
-                await db2.execute(
-                    "UPDATE generations SET status='failed', error=?, updated_at=datetime('now') WHERE id=?",
-                    (str(e), gen_id),
-                )
-                await db2.commit()
-
-
-# ── Bulk generation ───────────────────────────────────────────────────────────
-
-@app.post("/api/influencers/{influencer_id}/bulk", status_code=201)
-async def bulk_generate(
-    influencer_id: int,
-    body: BulkGenerationCreate,
-    background_tasks: BackgroundTasks,
-    db: aiosqlite.Connection = Depends(get_db),
-):
-    async with db.execute("SELECT id FROM influencers WHERE id=?", (influencer_id,)) as cur:
-        if not await cur.fetchone():
-            raise HTTPException(404, "Influenceur introuvable")
-
-    if not body.prompts:
-        raise HTTPException(400, "Au moins un prompt requis")
-
-    async with db.execute(
-        "INSERT INTO bulk_jobs (influencer_id, name, total, status) VALUES (?,?,?,?)",
-        (influencer_id, body.name or f"Bulk {len(body.prompts)} images", len(body.prompts), "running"),
-    ) as cur:
-        bulk_id = cur.lastrowid
-
-    gen_ids = []
-    for prompt in body.prompts:
-        async with db.execute(
-            "INSERT INTO generations (influencer_id, prompt, model, aspect_ratio, count, status) VALUES (?,?,?,?,?,?)",
-            (influencer_id, prompt, body.model, body.aspect_ratio, body.count, "pending"),
-        ) as cur:
-            gen_ids.append(cur.lastrowid)
-    await db.commit()
-
-    gen_body = GenerationCreate(
-        prompt="",
-        model=body.model,
-        aspect_ratio=body.aspect_ratio,
-        count=body.count,
-        medias=body.medias,
-    )
-    background_tasks.add_task(_run_bulk, bulk_id, gen_ids, body.prompts, gen_body)
-
-    return {"bulk_job_id": bulk_id, "generation_ids": gen_ids, "total": len(gen_ids)}
-
-
-async def _run_bulk(bulk_id: int, gen_ids: list, prompts: list, base_body: GenerationCreate):
-    db_path = os.path.join(os.path.dirname(__file__), "data.db")
-    tasks = []
-    for gen_id, prompt in zip(gen_ids, prompts):
-        body = base_body.model_copy(update={"prompt": prompt})
-        tasks.append(_run_generation(gen_id, body))
-
-    results = await asyncio.gather(*tasks, return_exceptions=True)
-    done = sum(1 for r in results if not isinstance(r, Exception))
-    failed = sum(1 for r in results if isinstance(r, Exception))
-
-    async with aiosqlite.connect(db_path) as db:
-        await db.execute(
-            "UPDATE bulk_jobs SET done=?, failed=?, status='done' WHERE id=?",
-            (done, failed, bulk_id),
-        )
-        await db.commit()
-
-
-@app.get("/api/influencers/{influencer_id}/bulk")
-async def list_bulk_jobs(influencer_id: int, db: aiosqlite.Connection = Depends(get_db)):
-    async with db.execute(
-        "SELECT * FROM bulk_jobs WHERE influencer_id=? ORDER BY created_at DESC",
-        (influencer_id,),
-    ) as cur:
-        rows = await cur.fetchall()
-    return [dict(r) for r in rows]
-
-
-@app.get("/api/generations/{gen_id}/refresh")
-async def refresh_generation(gen_id: int, db: aiosqlite.Connection = Depends(get_db)):
-    async with db.execute("SELECT * FROM generations WHERE id=?", (gen_id,)) as cur:
-        row = await cur.fetchone()
-    if not row:
-        raise HTTPException(404)
-    gen = dict(row)
-    if gen["job_id"] and gen["status"] == "generating":
-        try:
-            data = await hf.get_generation_status(gen["job_id"])
-            api_status = data.get("status", "")
-            if api_status in ("completed", "done", "succeeded"):
-                images = data.get("images") or data.get("outputs") or data.get("results") or []
-                urls = [img.get("url") or img for img in images if img]
-                await db.execute(
-                    "UPDATE generations SET status='done', image_urls=?, updated_at=datetime('now') WHERE id=?",
-                    (json.dumps(urls), gen_id),
-                )
-                await db.commit()
-        except Exception:
-            pass
-        async with db.execute("SELECT * FROM generations WHERE id=?", (gen_id,)) as cur:
-            row = await cur.fetchone()
-        gen = dict(row)
-    gen["image_urls"] = json.loads(gen["image_urls"] or "[]")
-    return gen
-
-
-# ── Models ────────────────────────────────────────────────────────────────────
-
-@app.get("/api/models")
-async def get_models():
-    try:
-        return await hf.list_models()
-    except Exception as e:
-        return {"error": str(e), "models": []}
+            await db.execute(
+                "UPDATE generations SET status='failed', error=?, updated_at=datetime('now') WHERE id=?",
+                (str(e), gid),
+            )
+            await db.commit()
 
 
 # ── Frontend ──────────────────────────────────────────────────────────────────
-
-app.mount("/", StaticFiles(directory=FRONTEND_DIR, html=True), name="frontend")
+app.mount("/", StaticFiles(directory=FRONTEND, html=True), name="static")
