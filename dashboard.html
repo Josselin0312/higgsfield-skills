@@ -1,0 +1,986 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Studio AI — Contenu Influenceurs</title>
+<style>
+  :root {
+    --bg: #f5f5f7;
+    --white: #ffffff;
+    --border: #e5e5ea;
+    --text: #1c1c1e;
+    --muted: #8e8e93;
+    --light: #f2f2f7;
+    --shadow: 0 2px 16px rgba(0,0,0,0.07);
+    --shadow-hover: 0 8px 32px rgba(0,0,0,0.12);
+    --radius: 18px;
+    --radius-sm: 12px;
+    --insta: #e1306c;
+    --tiktok: #010101;
+    --threads: #000000;
+    --accent: #5856d6;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Display', 'Segoe UI', sans-serif;
+    min-height: 100vh;
+  }
+
+  /* ── SCREENS ── */
+  .screen { display: none; min-height: 100vh; }
+  .screen.active { display: flex; flex-direction: column; }
+
+  /* ── TOP BAR ── */
+  .topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 20px 32px;
+    background: var(--white);
+    border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 10;
+  }
+  .topbar-logo {
+    font-size: 16px;
+    font-weight: 700;
+    letter-spacing: -0.3px;
+    color: var(--text);
+  }
+  .topbar-logo span { color: var(--accent); }
+  .topbar-right { display: flex; align-items: center; gap: 12px; }
+  .breadcrumb {
+    display: flex; align-items: center; gap: 8px;
+    font-size: 14px; color: var(--muted);
+  }
+  .breadcrumb .sep { color: var(--border); }
+  .breadcrumb .active-crumb { color: var(--text); font-weight: 500; }
+  .back-btn {
+    background: var(--light);
+    border: none;
+    border-radius: 10px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--text);
+    cursor: pointer;
+    font-weight: 500;
+    display: flex; align-items: center; gap: 6px;
+    transition: background 0.15s;
+  }
+  .back-btn:hover { background: var(--border); }
+
+  /* ── PAGE CONTENT ── */
+  .page { max-width: 900px; margin: 0 auto; padding: 40px 24px; width: 100%; }
+
+  .page-title {
+    font-size: 28px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+    margin-bottom: 6px;
+  }
+  .page-sub {
+    font-size: 15px;
+    color: var(--muted);
+    margin-bottom: 36px;
+  }
+
+  /* ── INFLUENCER CARDS (Screen 1) ── */
+  .influencer-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+    gap: 16px;
+  }
+  .influencer-card {
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 28px 20px;
+    cursor: pointer;
+    transition: all 0.18s;
+    text-align: center;
+    box-shadow: var(--shadow);
+  }
+  .influencer-card:hover {
+    border-color: var(--accent);
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-3px);
+  }
+  .influencer-avatar {
+    width: 72px; height: 72px;
+    border-radius: 50%;
+    margin: 0 auto 14px;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 26px;
+    font-weight: 700;
+    color: white;
+  }
+  .influencer-name { font-size: 15px; font-weight: 600; margin-bottom: 6px; }
+  .influencer-soul {
+    font-size: 12px;
+    color: var(--muted);
+    display: flex; align-items: center; justify-content: center; gap: 4px;
+  }
+  .soul-dot { width: 7px; height: 7px; border-radius: 50%; }
+
+  .add-card {
+    background: transparent;
+    border: 1.5px dashed var(--border);
+    border-radius: var(--radius);
+    padding: 28px 20px;
+    cursor: pointer;
+    transition: all 0.18s;
+    text-align: center;
+    color: var(--muted);
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    gap: 10px;
+    min-height: 160px;
+  }
+  .add-card:hover { border-color: var(--accent); color: var(--accent); }
+  .add-icon { font-size: 28px; line-height: 1; }
+
+  /* ── PLATFORM CARDS (Screen 2) ── */
+  .platform-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
+    gap: 16px;
+  }
+  .platform-card {
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    cursor: pointer;
+    transition: all 0.18s;
+    box-shadow: var(--shadow);
+    display: flex; flex-direction: column; gap: 14px;
+  }
+  .platform-card:hover {
+    box-shadow: var(--shadow-hover);
+    transform: translateY(-3px);
+  }
+  .platform-logo-wrap {
+    width: 52px; height: 52px;
+    border-radius: 14px;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+  }
+  .platform-card-header { display: flex; align-items: center; gap: 14px; }
+  .platform-card-title { font-size: 15px; font-weight: 700; }
+  .platform-card-sub { font-size: 12px; color: var(--muted); margin-top: 2px; }
+  .platform-badges { display: flex; gap: 6px; flex-wrap: wrap; }
+  .badge {
+    background: var(--light);
+    border-radius: 7px;
+    padding: 4px 10px;
+    font-size: 12px;
+    font-weight: 500;
+    color: var(--muted);
+  }
+  .badge.colored { color: white; }
+
+  /* Hover border colors */
+  .p-insta-feed:hover { border-color: #e1306c; }
+  .p-reels-cover:hover { border-color: #e1306c; }
+  .p-reels-video:hover { border-color: #e1306c; }
+  .p-tiktok:hover { border-color: #69c9d0; }
+  .p-threads:hover { border-color: #000; }
+
+  /* ── SELECTED INFLUENCER PILL ── */
+  .selected-pill {
+    display: inline-flex;
+    align-items: center;
+    gap: 10px;
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 16px 8px 10px;
+    margin-bottom: 28px;
+    box-shadow: var(--shadow);
+  }
+  .selected-pill .mini-avatar {
+    width: 32px; height: 32px;
+    border-radius: 50%;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 14px; font-weight: 700; color: white;
+  }
+  .selected-pill .pill-name { font-size: 14px; font-weight: 600; }
+  .selected-pill .pill-soul { font-size: 12px; color: var(--muted); }
+
+  /* ── GENERATOR (Screen 3) ── */
+  .gen-layout { display: grid; grid-template-columns: 1fr 340px; gap: 24px; }
+  @media(max-width:700px) { .gen-layout { grid-template-columns: 1fr; } }
+
+  .gen-form-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 28px;
+    box-shadow: var(--shadow);
+    border: 1.5px solid var(--border);
+  }
+  .gen-form-title { font-size: 18px; font-weight: 700; margin-bottom: 22px; }
+  .form-group { margin-bottom: 20px; }
+  label { display: block; font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.8px; color: var(--muted); margin-bottom: 8px; }
+  textarea {
+    width: 100%;
+    background: var(--light);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 12px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--text);
+    resize: vertical;
+    min-height: 110px;
+    outline: none;
+    transition: border-color 0.15s;
+  }
+  textarea:focus { border-color: var(--accent); background: var(--white); }
+  textarea::placeholder { color: var(--muted); }
+
+  .chip-group { display: flex; gap: 8px; flex-wrap: wrap; }
+  .chip {
+    background: var(--light);
+    border: 1.5px solid var(--border);
+    border-radius: 999px;
+    padding: 7px 16px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.15s;
+    color: var(--text);
+  }
+  .chip:hover { border-color: var(--accent); color: var(--accent); }
+  .chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+
+  .gen-btn {
+    width: 100%;
+    padding: 15px;
+    background: var(--accent);
+    border: none;
+    border-radius: var(--radius-sm);
+    color: white;
+    font-size: 16px;
+    font-weight: 700;
+    cursor: pointer;
+    margin-top: 8px;
+    transition: opacity 0.15s, transform 0.15s;
+    letter-spacing: -0.2px;
+  }
+  .gen-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+
+  /* ── SIDE PANEL ── */
+  .side-panel { display: flex; flex-direction: column; gap: 16px; }
+
+  .info-card {
+    background: var(--white);
+    border-radius: var(--radius);
+    padding: 22px;
+    box-shadow: var(--shadow);
+    border: 1.5px solid var(--border);
+  }
+  .info-card-title { font-size: 13px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 14px; }
+
+  .model-chip {
+    background: #f0f0ff;
+    border: 1.5px solid #d0d0ff;
+    border-radius: 10px;
+    padding: 10px 14px;
+    font-size: 13px;
+    font-weight: 600;
+    color: var(--accent);
+    margin-bottom: 8px;
+  }
+  .model-desc { font-size: 13px; color: var(--muted); line-height: 1.5; }
+
+  .command-card {
+    background: #1c1c1e;
+    border-radius: var(--radius);
+    padding: 22px;
+    box-shadow: var(--shadow);
+    display: none;
+  }
+  .command-card.visible { display: block; }
+  .command-card-top { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+  .command-card-label { font-size: 12px; font-weight: 600; color: #636366; text-transform: uppercase; letter-spacing: 0.8px; }
+  .copy-btn {
+    background: #2c2c2e;
+    border: none;
+    border-radius: 8px;
+    padding: 5px 12px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #98989d;
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .copy-btn:hover { background: #3a3a3c; color: #34d399; }
+  .copy-btn.done { color: #34d399; }
+  .command-pre {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    color: #34d399;
+    white-space: pre-wrap;
+    word-break: break-all;
+    line-height: 1.6;
+  }
+
+  /* ── HISTORY SECTION ── */
+  .history-section { margin-top: 40px; }
+  .history-title { font-size: 14px; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 16px; }
+  .history-list { display: flex; flex-direction: column; gap: 8px; }
+  .history-item {
+    background: var(--white);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 14px 18px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: var(--shadow);
+  }
+  .history-platform-icon { width: 36px; height: 36px; border-radius: 10px; display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+  .history-info { flex: 1; min-width: 0; }
+  .history-top { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; }
+  .history-name { font-size: 14px; font-weight: 600; }
+  .history-tag { font-size: 11px; color: var(--muted); background: var(--light); border-radius: 5px; padding: 2px 7px; }
+  .history-prompt { font-size: 13px; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .history-date { font-size: 12px; color: var(--muted); flex-shrink: 0; }
+  .history-del { background: none; border: none; color: var(--muted); cursor: pointer; font-size: 16px; padding: 4px; flex-shrink: 0; }
+  .history-del:hover { color: #ff3b30; }
+  .history-empty { font-size: 14px; color: var(--muted); text-align: center; padding: 24px; }
+
+  /* ── MODAL ── */
+  .overlay {
+    display: none; position: fixed; inset: 0;
+    background: rgba(0,0,0,0.4); backdrop-filter: blur(4px);
+    z-index: 100; align-items: center; justify-content: center;
+  }
+  .overlay.open { display: flex; }
+  .modal {
+    background: var(--white);
+    border-radius: 20px;
+    padding: 28px;
+    width: 380px; max-width: 90vw;
+    box-shadow: 0 24px 60px rgba(0,0,0,0.2);
+  }
+  .modal-title { font-size: 18px; font-weight: 700; margin-bottom: 20px; }
+  .modal-input {
+    width: 100%;
+    background: var(--light);
+    border: 1.5px solid var(--border);
+    border-radius: var(--radius-sm);
+    padding: 11px 14px;
+    font-size: 15px;
+    font-family: inherit;
+    color: var(--text);
+    outline: none;
+    margin-bottom: 12px;
+    transition: border-color 0.15s;
+  }
+  .modal-input:focus { border-color: var(--accent); background: var(--white); }
+  .modal-hint { font-size: 12px; color: var(--muted); margin-bottom: 20px; margin-top: -8px; }
+  .modal-btns { display: flex; gap: 10px; }
+  .btn-cancel {
+    flex: 1; padding: 11px;
+    background: var(--light); border: none; border-radius: var(--radius-sm);
+    font-size: 15px; font-weight: 500; color: var(--text); cursor: pointer;
+  }
+  .btn-save {
+    flex: 1; padding: 11px;
+    background: var(--accent); border: none; border-radius: var(--radius-sm);
+    font-size: 15px; font-weight: 700; color: white; cursor: pointer;
+  }
+
+  /* ── TOAST ── */
+  .toast {
+    position: fixed; bottom: 28px; left: 50%;
+    transform: translateX(-50%) translateY(70px);
+    background: #1c1c1e; color: white;
+    padding: 12px 22px; border-radius: 999px;
+    font-size: 14px; font-weight: 500;
+    transition: transform 0.28s cubic-bezier(0.34, 1.56, 0.64, 1);
+    z-index: 999; white-space: nowrap;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* ── AVATAR COLORS ── */
+  .av-0 { background: linear-gradient(135deg, #ff6b6b, #ee5a24); }
+  .av-1 { background: linear-gradient(135deg, #a29bfe, #6c5ce7); }
+  .av-2 { background: linear-gradient(135deg, #55efc4, #00b894); }
+  .av-3 { background: linear-gradient(135deg, #ffeaa7, #fdcb6e); }
+  .av-4 { background: linear-gradient(135deg, #fd79a8, #e84393); }
+  .av-5 { background: linear-gradient(135deg, #74b9ff, #0984e3); }
+
+  @media(max-width:600px) {
+    .page { padding: 24px 16px; }
+    .topbar { padding: 16px; }
+    .influencer-grid { grid-template-columns: repeat(2, 1fr); }
+    .platform-grid { grid-template-columns: 1fr; }
+    .page-title { font-size: 22px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- ─── TOAST ─────────────────────────────────────── -->
+<div class="toast" id="toast"></div>
+
+<!-- ─── MODAL INFLUENCEUR ────────────────────────── -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-title">Ajouter un influenceur</div>
+    <input class="modal-input" id="inf-name" placeholder="Prénom Nom (ex: Sophie Martin)" />
+    <input class="modal-input" id="inf-soul" placeholder="Soul ID (optionnel)" />
+    <p class="modal-hint">Le Soul ID est disponible après avoir entraîné un personnage sur Higgsfield</p>
+    <div class="modal-btns">
+      <button class="btn-cancel" onclick="closeModal()">Annuler</button>
+      <button class="btn-save" onclick="saveInfluencer()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN 1 — CHOISIR L'INFLUENCEUR
+═══════════════════════════════════════════════════ -->
+<div class="screen active" id="s1">
+  <div class="topbar">
+    <div class="topbar-logo">Studio <span>AI</span></div>
+    <div class="breadcrumb">
+      <span class="active-crumb">Influenceur</span>
+      <span class="sep">›</span>
+      <span>Plateforme</span>
+      <span class="sep">›</span>
+      <span>Générer</span>
+    </div>
+  </div>
+  <div class="page">
+    <div class="page-title">Avec qui travailles-tu aujourd'hui ?</div>
+    <div class="page-sub">Sélectionne un influenceur pour commencer la session de création</div>
+    <div class="influencer-grid" id="inf-grid">
+      <div class="add-card" onclick="openModal()">
+        <div class="add-icon">+</div>
+        <div style="font-size:14px;font-weight:600;">Ajouter un influenceur</div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN 2 — CHOISIR LA PLATEFORME
+═══════════════════════════════════════════════════ -->
+<div class="screen" id="s2">
+  <div class="topbar">
+    <div class="topbar-logo">Studio <span>AI</span></div>
+    <div class="topbar-right">
+      <div class="breadcrumb">
+        <span>Influenceur</span>
+        <span class="sep">›</span>
+        <span class="active-crumb">Plateforme</span>
+        <span class="sep">›</span>
+        <span>Générer</span>
+      </div>
+      <button class="back-btn" onclick="goTo(1)">← Retour</button>
+    </div>
+  </div>
+  <div class="page">
+    <div id="s2-pill"></div>
+    <div class="page-title">Sur quel réseau ?</div>
+    <div class="page-sub">Chaque plateforme utilise le meilleur modèle Higgsfield adapté</div>
+    <div class="platform-grid">
+
+      <!-- Instagram Feed -->
+      <div class="platform-card p-insta-feed" onclick="selectPlatform('insta-feed')">
+        <div class="platform-card-header">
+          <div class="platform-logo-wrap" style="background:#fdf0f5">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+              <defs>
+                <radialGradient id="ig1" cx="30%" cy="107%" r="150%">
+                  <stop offset="0%" stop-color="#fdf497"/>
+                  <stop offset="5%" stop-color="#fdf497"/>
+                  <stop offset="45%" stop-color="#fd5949"/>
+                  <stop offset="60%" stop-color="#d6249f"/>
+                  <stop offset="90%" stop-color="#285AEB"/>
+                </radialGradient>
+              </defs>
+              <rect x="2" y="2" width="20" height="20" rx="6" fill="url(#ig1)"/>
+              <circle cx="12" cy="12" r="4.5" stroke="white" stroke-width="1.8" fill="none"/>
+              <circle cx="17.5" cy="6.5" r="1.2" fill="white"/>
+            </svg>
+          </div>
+          <div>
+            <div class="platform-card-title">Instagram Feed</div>
+            <div class="platform-card-sub">Image pour le fil d'actualité</div>
+          </div>
+        </div>
+        <div class="platform-badges">
+          <span class="badge">4:5</span>
+          <span class="badge">1:1</span>
+          <span class="badge">Image</span>
+        </div>
+      </div>
+
+      <!-- Instagram Reels Cover -->
+      <div class="platform-card p-reels-cover" onclick="selectPlatform('reels-cover')">
+        <div class="platform-card-header">
+          <div class="platform-logo-wrap" style="background:#fdf0f5">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+              <defs>
+                <radialGradient id="ig2" cx="30%" cy="107%" r="150%">
+                  <stop offset="0%" stop-color="#fdf497"/>
+                  <stop offset="5%" stop-color="#fdf497"/>
+                  <stop offset="45%" stop-color="#fd5949"/>
+                  <stop offset="60%" stop-color="#d6249f"/>
+                  <stop offset="90%" stop-color="#285AEB"/>
+                </radialGradient>
+              </defs>
+              <rect x="2" y="2" width="20" height="20" rx="6" fill="url(#ig2)"/>
+              <path d="M10 8.5l6 3.5-6 3.5V8.5z" fill="white"/>
+            </svg>
+          </div>
+          <div>
+            <div class="platform-card-title">Reels — Cover</div>
+            <div class="platform-card-sub">Miniature / thumbnail du Reel</div>
+          </div>
+        </div>
+        <div class="platform-badges">
+          <span class="badge">9:16</span>
+          <span class="badge">Image</span>
+        </div>
+      </div>
+
+      <!-- Instagram Reels Video -->
+      <div class="platform-card p-reels-video" onclick="selectPlatform('reels-video')">
+        <div class="platform-card-header">
+          <div class="platform-logo-wrap" style="background:#fdf0f5">
+            <svg width="30" height="30" viewBox="0 0 24 24" fill="none">
+              <defs>
+                <radialGradient id="ig3" cx="30%" cy="107%" r="150%">
+                  <stop offset="0%" stop-color="#fdf497"/>
+                  <stop offset="5%" stop-color="#fdf497"/>
+                  <stop offset="45%" stop-color="#fd5949"/>
+                  <stop offset="60%" stop-color="#d6249f"/>
+                  <stop offset="90%" stop-color="#285AEB"/>
+                </radialGradient>
+              </defs>
+              <rect x="2" y="2" width="20" height="20" rx="6" fill="url(#ig3)"/>
+              <path d="M8 7h8M8 17h8M7 7v10M17 7v10" stroke="white" stroke-width="1.6" stroke-linecap="round"/>
+              <path d="M10 11l4 1-4 1v-2z" fill="white"/>
+            </svg>
+          </div>
+          <div>
+            <div class="platform-card-title">Reels — Vidéo</div>
+            <div class="platform-card-sub">Vidéo verticale Instagram</div>
+          </div>
+        </div>
+        <div class="platform-badges">
+          <span class="badge">9:16</span>
+          <span class="badge">1080p</span>
+          <span class="badge">Vidéo</span>
+        </div>
+      </div>
+
+      <!-- TikTok -->
+      <div class="platform-card p-tiktok" onclick="selectPlatform('tiktok')">
+        <div class="platform-card-header">
+          <div class="platform-logo-wrap" style="background:#f0fffe">
+            <svg width="30" height="30" viewBox="0 0 32 32" fill="none">
+              <rect width="32" height="32" rx="9" fill="#010101"/>
+              <path d="M21.5 7c.4 2.3 1.8 3.8 4 4.2v3c-1.3 0-2.6-.4-3.7-1.1v5.6c0 3.8-3 6.3-6.4 6.3-3.4 0-6.4-2.5-6.4-6.3 0-3.8 3-6.2 6.4-6.2.3 0 .6 0 .9.1v3.1c-.3-.1-.6-.1-.9-.1-1.8 0-3.2 1.4-3.2 3.1 0 1.7 1.4 3.1 3.2 3.1 1.8 0 3.2-1.4 3.2-3.1V7h3z" fill="white"/>
+              <path d="M21.5 7c.4 2.3 1.8 3.8 4 4.2v3c-1.3 0-2.6-.4-3.7-1.1v5.6c0 3.8-3 6.3-6.4 6.3" stroke="#69c9d0" stroke-width="0.6" fill="none"/>
+            </svg>
+          </div>
+          <div>
+            <div class="platform-card-title">TikTok</div>
+            <div class="platform-card-sub">Vidéo courte verticale</div>
+          </div>
+        </div>
+        <div class="platform-badges">
+          <span class="badge">9:16</span>
+          <span class="badge">1080p</span>
+          <span class="badge">Vidéo</span>
+        </div>
+      </div>
+
+      <!-- Threads -->
+      <div class="platform-card p-threads" onclick="selectPlatform('threads')">
+        <div class="platform-card-header">
+          <div class="platform-logo-wrap" style="background:#f5f5f5">
+            <svg width="30" height="30" viewBox="0 0 192 192" fill="none">
+              <path d="M141.537 88.9883C140.71 88.5919 139.87 88.2104 139.019 87.8451C137.537 60.5382 122.616 44.905 97.5619 44.745C97.4484 44.7443 97.3355 44.7443 97.222 44.7443C82.2364 44.7443 69.7731 51.1409 62.102 62.7807L75.881 72.2328C81.6116 63.5383 90.6052 61.6848 97.2286 61.6848C97.3051 61.6848 97.3819 61.6848 97.4576 61.6855C105.707 61.7381 111.932 64.1366 115.961 68.814C118.893 72.2193 120.854 76.925 121.825 82.8638C114.511 81.6207 106.601 81.2385 98.145 81.7233C74.3247 83.0954 59.0111 96.9879 60.0396 116.292C60.5615 126.084 65.4397 134.508 73.775 140.011C80.8224 144.663 89.899 146.938 99.3323 146.423C111.79 145.74 121.563 140.987 128.381 132.296C133.559 125.696 136.834 117.143 138.28 106.366C144.217 109.949 148.617 114.664 151.047 120.332C155.179 129.967 155.42 145.8 142.501 158.708C131.182 170.016 117.576 174.908 97.0135 175.059C74.2042 174.89 57.0746 167.997 45.9962 154.5C35.5979 141.86 30.2043 123.644 29.9998 100C30.2043 76.3555 35.5979 58.1399 45.9962 45.5C57.0746 32.003 74.2042 25.1099 97.0135 24.9412C119.988 25.1107 137.539 32.0485 149.184 45.5752C154.894 52.2057 159.19 60.4692 162.027 70.1553L178.184 65.8443C174.744 54.0353 169.402 43.8013 162.178 35.2677C147.453 17.9323 126.157 9.08427 97.0763 8.8877C67.7956 9.08427 46.8048 18.0005 32.3913 35.2838C19.6976 50.6327 13.0959 72.1588 12.8875 99.9572L12.8875 100.043C13.0959 127.841 19.6976 149.367 32.3913 164.716C46.8048 181.999 67.7956 190.916 97.0763 191.112C129.609 190.89 151.969 181.027 166.92 166.086C183.607 149.393 183.337 128.166 177.907 115.667C173.749 106.086 166.023 98.4553 155.249 93.3398" fill="#000000"/>
+              <path d="M98.9752 124.01C88.0375 124.586 82.0761 119.362 81.7858 113.302C81.4947 107.2 86.9021 102.073 98.077 101.427C101.138 101.249 104.13 101.36 106.985 101.742C109.337 113.391 105.793 123.423 98.9752 124.01Z" fill="#000000"/>
+            </svg>
+          </div>
+          <div>
+            <div class="platform-card-title">Threads</div>
+            <div class="platform-card-sub">Image authentique lifestyle</div>
+          </div>
+        </div>
+        <div class="platform-badges">
+          <span class="badge">1:1</span>
+          <span class="badge">4:5</span>
+          <span class="badge">Image</span>
+        </div>
+      </div>
+
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════════
+     SCREEN 3 — GÉNÉRER
+═══════════════════════════════════════════════════ -->
+<div class="screen" id="s3">
+  <div class="topbar">
+    <div class="topbar-logo">Studio <span>AI</span></div>
+    <div class="topbar-right">
+      <div class="breadcrumb">
+        <span>Influenceur</span>
+        <span class="sep">›</span>
+        <span>Plateforme</span>
+        <span class="sep">›</span>
+        <span class="active-crumb">Générer</span>
+      </div>
+      <button class="back-btn" onclick="goTo(2)">← Retour</button>
+    </div>
+  </div>
+  <div class="page">
+    <div id="s3-pill"></div>
+    <div class="page-title" id="s3-title">Générer le contenu</div>
+    <div class="page-sub" id="s3-sub"></div>
+
+    <div class="gen-layout">
+      <!-- FORM -->
+      <div class="gen-form-card">
+        <div class="gen-form-title">Décris ton contenu</div>
+
+        <div class="form-group">
+          <label>Description du visuel</label>
+          <textarea id="gen-prompt" placeholder="Ambiance, tenue, lieu, émotion, action… (ex: influenceuse dans un café parisien, tenue casual chic, lumière naturelle dorée, regarde la caméra en souriant)"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Format</label>
+          <div class="chip-group" id="format-chips"></div>
+        </div>
+
+        <div class="form-group">
+          <label>Type de contenu</label>
+          <div class="chip-group" id="type-chips"></div>
+        </div>
+
+        <button class="gen-btn" onclick="generate()">✦ Générer la commande</button>
+      </div>
+
+      <!-- SIDE PANEL -->
+      <div class="side-panel">
+        <div class="info-card">
+          <div class="info-card-title">Modèle recommandé</div>
+          <div class="model-chip" id="model-chip">—</div>
+          <div class="model-desc" id="model-desc">Sélectionne un type pour voir le modèle optimal.</div>
+        </div>
+
+        <div class="command-card" id="command-card">
+          <div class="command-card-top">
+            <div class="command-card-label">Commande Claude Code</div>
+            <button class="copy-btn" id="copy-btn" onclick="copyCmd()">Copier</button>
+          </div>
+          <pre class="command-pre" id="command-pre"></pre>
+        </div>
+
+        <!-- HISTORY -->
+        <div class="history-section" id="history-section">
+          <div class="history-title">Historique</div>
+          <div class="history-list" id="history-list"></div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+// ─── DATA ────────────────────────────────────────────────────────
+const PLATFORMS = {
+  'insta-feed': {
+    label: 'Instagram Feed', icon: 'ig',
+    title: 'Instagram Feed', sub: 'Image portrait ou carrée pour le fil d\'actualité',
+    formats: ['4:5','1:1'],
+    types: { photo:'Portrait', lifestyle:'Lifestyle', produit:'Produit' },
+    models: { photo:'soul_2', lifestyle:'nano_banana_2', produit:'marketing_studio_image' },
+    descs: { photo:'Portrait réaliste UGC — cohérence de personnage maximale', lifestyle:'Qualité 4K, parfait pour les visuels lifestyle et éditoriaux', produit:'One-click pub produit optimisée pour les réseaux sociaux' },
+    skill:'gen-instagram-feed', defaultFmt:'4:5', defaultType:'photo'
+  },
+  'reels-cover': {
+    label: 'Reels Cover', icon: 'ig',
+    title: 'Reels — Image Cover', sub: 'Miniature verticale pour ton Instagram Reel',
+    formats: ['9:16'],
+    types: { portrait:'Portrait UGC', editorial:'Éditorial / Cinéma' },
+    models: { portrait:'soul_2', editorial:'soul_cinematic' },
+    descs: { portrait:'Style UGC authentique, identité cohérente', editorial:'Rendu éditorial cinématique, qualité magazine' },
+    skill:'gen-reels', defaultFmt:'9:16', defaultType:'portrait'
+  },
+  'reels-video': {
+    label: 'Reels Vidéo', icon: 'ig',
+    title: 'Reels — Vidéo', sub: 'Vidéo verticale 9:16 pour Instagram Reels',
+    formats: ['9:16'],
+    types: { ugc:'UGC Authentique', ad:'Publicité Produit', cinema:'Cinématique Premium' },
+    models: { ugc:'seedance_2_0', ad:'marketing_studio_video', cinema:'cinematic_studio_3_0' },
+    descs: { ugc:'Identité cohérente, parfait pour UGC influenceur', ad:'One-click Reels/TikTok prêt à publier', cinema:'Qualité vidéo maximale, style film' },
+    skill:'gen-video-reel', defaultFmt:'9:16', defaultType:'ugc'
+  },
+  'tiktok': {
+    label: 'TikTok', icon: 'tt',
+    title: 'TikTok', sub: 'Vidéo verticale 9:16 optimisée pour l\'engagement TikTok',
+    formats: ['9:16'],
+    types: { ugc:'UGC Authentique', trend:'Trend / Multi-shot', ad:'Publicité Produit' },
+    models: { ugc:'seedance_2_0', trend:'kling3_0', ad:'marketing_studio_video' },
+    descs: { ugc:'Identité stable, référence image, style naturel', trend:'Multi-shot, audio sync, transitions dynamiques', ad:'TikTok/Reels ready, one-click ads' },
+    skill:'gen-tiktok', defaultFmt:'9:16', defaultType:'ugc'
+  },
+  'threads': {
+    label: 'Threads', icon: 'th',
+    title: 'Threads', sub: 'Image authentique pour Meta Threads',
+    formats: ['1:1','4:5'],
+    types: { photo:'Photo Lifestyle', graphic:'Visuel Graphique', text:'Texte + Image' },
+    models: { photo:'nano_banana_2', graphic:'nano_banana_2', text:'gpt_image_2' },
+    descs: { photo:'Qualité maximale, ambiance authentique lifestyle', graphic:'Visuels épurés, design moderne', text:'Meilleur rendu de texte intégré dans l\'image' },
+    skill:'gen-threads', defaultFmt:'1:1', defaultType:'photo'
+  }
+};
+
+const AVATAR_COLORS = ['av-0','av-1','av-2','av-3','av-4','av-5'];
+
+// ─── STATE ────────────────────────────────────────────────────────
+let currentInfluencer = null;
+let currentPlatformId = null;
+let selectedFormat = null;
+let selectedType = null;
+
+// ─── STORAGE ─────────────────────────────────────────────────────
+const getInfluencers = () => JSON.parse(localStorage.getItem('inf_v2') || '[]');
+const setInfluencers = v => localStorage.setItem('inf_v2', JSON.stringify(v));
+const getHistory = () => JSON.parse(localStorage.getItem('hist_v2') || '[]');
+const setHistory = v => localStorage.setItem('hist_v2', JSON.stringify(v));
+
+// ─── SCREENS ─────────────────────────────────────────────────────
+function goTo(n) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('s' + n).classList.add('active');
+  window.scrollTo(0, 0);
+}
+
+// ─── INFLUENCEURS ─────────────────────────────────────────────────
+function renderInfluencers() {
+  const list = getInfluencers();
+  const grid = document.getElementById('inf-grid');
+  grid.innerHTML = '';
+  list.forEach((inf, i) => {
+    const col = AVATAR_COLORS[i % AVATAR_COLORS.length];
+    const card = document.createElement('div');
+    card.className = 'influencer-card';
+    card.innerHTML = `
+      <div class="influencer-avatar ${col}">${inf.name.charAt(0).toUpperCase()}</div>
+      <div class="influencer-name">${inf.name}</div>
+      <div class="influencer-soul">
+        <span class="soul-dot" style="background:${inf.soul ? '#34c759' : '#d1d1d6'}"></span>
+        ${inf.soul ? 'Soul entraîné' : 'Sans Soul ID'}
+      </div>`;
+    card.onclick = () => selectInfluencer(i);
+    grid.appendChild(card);
+  });
+  const add = document.createElement('div');
+  add.className = 'add-card';
+  add.innerHTML = `<div class="add-icon">+</div><div style="font-size:14px;font-weight:600;">Ajouter</div>`;
+  add.onclick = openModal;
+  grid.appendChild(add);
+}
+
+function selectInfluencer(i) {
+  currentInfluencer = i;
+  const inf = getInfluencers()[i];
+  const col = AVATAR_COLORS[i % AVATAR_COLORS.length];
+  const pill = `<div class="selected-pill">
+    <div class="mini-avatar ${col}">${inf.name.charAt(0).toUpperCase()}</div>
+    <div><div class="pill-name">${inf.name}</div><div class="pill-soul">${inf.soul ? '✓ Soul entraîné' : 'Sans Soul ID'}</div></div>
+  </div>`;
+  document.getElementById('s2-pill').innerHTML = pill;
+  goTo(2);
+}
+
+// ─── MODAL ────────────────────────────────────────────────────────
+function openModal() { document.getElementById('overlay').classList.add('open'); document.getElementById('inf-name').focus(); }
+function closeModal() { document.getElementById('overlay').classList.remove('open'); document.getElementById('inf-name').value = ''; document.getElementById('inf-soul').value = ''; }
+function saveInfluencer() {
+  const name = document.getElementById('inf-name').value.trim();
+  if (!name) { document.getElementById('inf-name').style.borderColor = '#ff3b30'; return; }
+  const soul = document.getElementById('inf-soul').value.trim();
+  const list = getInfluencers();
+  list.push({ name, soul });
+  setInfluencers(list);
+  renderInfluencers();
+  closeModal();
+  toast('Influenceur ajouté !');
+}
+document.getElementById('overlay').addEventListener('click', e => { if (e.target === document.getElementById('overlay')) closeModal(); });
+
+// ─── PLATFORM SELECTION ──────────────────────────────────────────
+function selectPlatform(id) {
+  currentPlatformId = id;
+  selectedFormat = null;
+  selectedType = null;
+  const p = PLATFORMS[id];
+  const inf = getInfluencers()[currentInfluencer];
+  const col = AVATAR_COLORS[currentInfluencer % AVATAR_COLORS.length];
+
+  // Pill
+  const pill = `<div class="selected-pill">
+    <div class="mini-avatar ${col}">${inf.name.charAt(0).toUpperCase()}</div>
+    <div><div class="pill-name">${inf.name}</div><div class="pill-soul">${p.label}</div></div>
+  </div>`;
+  document.getElementById('s3-pill').innerHTML = pill;
+  document.getElementById('s3-title').textContent = p.title;
+  document.getElementById('s3-sub').textContent = p.sub;
+
+  // Format chips
+  const fmtDiv = document.getElementById('format-chips');
+  fmtDiv.innerHTML = '';
+  p.formats.forEach(f => {
+    const c = document.createElement('button');
+    c.className = 'chip' + (f === p.defaultFmt ? ' active' : '');
+    c.textContent = f;
+    c.onclick = () => { fmtDiv.querySelectorAll('.chip').forEach(x => x.classList.remove('active')); c.classList.add('active'); selectedFormat = f; };
+    fmtDiv.appendChild(c);
+    if (f === p.defaultFmt) selectedFormat = f;
+  });
+
+  // Type chips
+  const typeDiv = document.getElementById('type-chips');
+  typeDiv.innerHTML = '';
+  Object.entries(p.types).forEach(([key, label]) => {
+    const c = document.createElement('button');
+    c.className = 'chip' + (key === p.defaultType ? ' active' : '');
+    c.textContent = label;
+    c.onclick = () => {
+      typeDiv.querySelectorAll('.chip').forEach(x => x.classList.remove('active'));
+      c.classList.add('active');
+      selectedType = key;
+      document.getElementById('model-chip').textContent = p.models[key];
+      document.getElementById('model-desc').textContent = p.descs[key];
+    };
+    typeDiv.appendChild(c);
+    if (key === p.defaultType) { selectedType = key; }
+  });
+  document.getElementById('model-chip').textContent = p.models[p.defaultType];
+  document.getElementById('model-desc').textContent = p.descs[p.defaultType];
+  document.getElementById('command-card').classList.remove('visible');
+  document.getElementById('gen-prompt').value = '';
+
+  renderHistoryForPlatform(id);
+  goTo(3);
+}
+
+// ─── GENERATE ─────────────────────────────────────────────────────
+function generate() {
+  const prompt = document.getElementById('gen-prompt').value.trim();
+  if (!prompt) {
+    const ta = document.getElementById('gen-prompt');
+    ta.style.borderColor = '#ff3b30';
+    ta.focus();
+    setTimeout(() => ta.style.borderColor = '', 1800);
+    return;
+  }
+  const p = PLATFORMS[currentPlatformId];
+  const inf = getInfluencers()[currentInfluencer];
+  const fmt = selectedFormat || p.defaultFmt;
+  const type = selectedType || p.defaultType;
+  const model = p.models[type];
+  const soulPart = inf.soul ? `\nSoul ID : ${inf.soul}` : '';
+  const cmd = `/${p.skill} influencer="${inf.name}" format="${fmt}" type="${type}"\n\nPrompt : ${prompt}\n\nModèle : ${model}${soulPart}`;
+  document.getElementById('command-pre').textContent = cmd;
+  document.getElementById('command-card').classList.add('visible');
+
+  // Save to history
+  const hist = getHistory();
+  hist.unshift({ platform: currentPlatformId, label: p.label, influencer: inf.name, prompt, model, fmt, type, date: new Date().toISOString() });
+  setHistory(hist.slice(0, 60));
+  renderHistoryForPlatform(currentPlatformId);
+  document.getElementById('command-card').scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function copyCmd() {
+  const text = document.getElementById('command-pre').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copy-btn');
+    btn.textContent = '✓ Copié';
+    btn.classList.add('done');
+    setTimeout(() => { btn.textContent = 'Copier'; btn.classList.remove('done'); }, 2000);
+    toast('Commande copiée ! Colle-la dans Claude Code.');
+  });
+}
+
+// ─── HISTORY ─────────────────────────────────────────────────────
+const PLATFORM_LOGO_MINI = {
+  'insta-feed': `<svg width="20" height="20" viewBox="0 0 24 24"><defs><radialGradient id="ihm" cx="30%" cy="107%" r="150%"><stop offset="0%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs><rect x="1" y="1" width="22" height="22" rx="7" fill="url(#ihm)"/><circle cx="12" cy="12" r="5" stroke="white" stroke-width="1.8" fill="none"/><circle cx="17.5" cy="6.5" r="1.2" fill="white"/></svg>`,
+  'reels-cover': `<svg width="20" height="20" viewBox="0 0 24 24"><defs><radialGradient id="rhm" cx="30%" cy="107%" r="150%"><stop offset="0%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs><rect x="1" y="1" width="22" height="22" rx="7" fill="url(#rhm)"/><path d="M10 8.5l6 3.5-6 3.5V8.5z" fill="white"/></svg>`,
+  'reels-video': `<svg width="20" height="20" viewBox="0 0 24 24"><defs><radialGradient id="rvm" cx="30%" cy="107%" r="150%"><stop offset="0%" stop-color="#fdf497"/><stop offset="45%" stop-color="#fd5949"/><stop offset="90%" stop-color="#285AEB"/></radialGradient></defs><rect x="1" y="1" width="22" height="22" rx="7" fill="url(#rvm)"/><path d="M8 7h8M8 17h8M7 7v10M17 7v10" stroke="white" stroke-width="1.6" stroke-linecap="round"/></svg>`,
+  'tiktok': `<svg width="20" height="20" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#010101"/><path d="M21.5 7c.4 2.3 1.8 3.8 4 4.2v3c-1.3 0-2.6-.4-3.7-1.1v5.6c0 3.8-3 6.3-6.4 6.3-3.4 0-6.4-2.5-6.4-6.3 0-3.8 3-6.2 6.4-6.2.3 0 .6 0 .9.1v3.1c-.3-.1-.6-.1-.9-.1-1.8 0-3.2 1.4-3.2 3.1 0 1.7 1.4 3.1 3.2 3.1 1.8 0 3.2-1.4 3.2-3.1V7h3z" fill="white"/></svg>`,
+  'threads': `<svg width="20" height="20" viewBox="0 0 192 192"><rect width="192" height="192" rx="50" fill="#f5f5f5"/><path d="M141.537 88.9883C140.71 88.5919 139.87 88.2104 139.019 87.8451C137.537 60.5382 122.616 44.905 97.5619 44.745C97.4484 44.7443 97.3355 44.7443 97.222 44.7443C82.2364 44.7443 69.7731 51.1409 62.102 62.7807L75.881 72.2328C81.6116 63.5383 90.6052 61.6848 97.2286 61.6848C105.707 61.7381 111.932 64.1366 115.961 68.814C118.893 72.2193 120.854 76.925 121.825 82.8638C114.511 81.6207 106.601 81.2385 98.145 81.7233C74.3247 83.0954 59.0111 96.9879 60.0396 116.292C60.5615 126.084 65.4397 134.508 73.775 140.011C80.8224 144.663 89.899 146.938 99.3323 146.423C111.79 145.74 121.563 140.987 128.381 132.296C133.559 125.696 136.834 117.143 138.28 106.366C144.217 109.949 148.617 114.664 151.047 120.332C155.179 129.967 155.42 145.8 142.501 158.708C131.182 170.016 117.576 174.908 97.0135 175.059C74.2042 174.89 57.0746 167.997 45.9962 154.5C35.5979 141.86 30.2043 123.644 29.9998 100C30.2043 76.3555 35.5979 58.1399 45.9962 45.5C57.0746 32.003 74.2042 25.1099 97.0135 24.9412C119.988 25.1107 137.539 32.0485 149.184 45.5752C154.894 52.2057 159.19 60.4692 162.027 70.1553L178.184 65.8443C174.744 54.0353 169.402 43.8013 162.178 35.2677C147.453 17.9323 126.157 9.08427 97.0763 8.8877C67.7956 9.08427 46.8048 18.0005 32.3913 35.2838C19.6976 50.6327 13.0959 72.1588 12.8875 99.9572L12.8875 100.043C13.0959 127.841 19.6976 149.367 32.3913 164.716C46.8048 181.999 67.7956 190.916 97.0763 191.112C129.609 190.89 151.969 181.027 166.92 166.086C183.607 149.393 183.337 128.166 177.907 115.667C173.749 106.086 166.023 98.4553 155.249 93.3398" fill="#000"/><path d="M98.9752 124.01C88.0375 124.586 82.0761 119.362 81.7858 113.302C81.4947 107.2 86.9021 102.073 98.077 101.427C101.138 101.249 104.13 101.36 106.985 101.742C109.337 113.391 105.793 123.423 98.9752 124.01Z" fill="#000"/></svg>`
+};
+
+const BG_COLORS = { 'insta-feed':'#fdf0f5','reels-cover':'#fdf0f5','reels-video':'#fdf0f5','tiktok':'#f0fffe','threads':'#f5f5f5' };
+
+function renderHistoryForPlatform(platformId) {
+  const hist = getHistory().filter(h => h.platform === platformId);
+  const list = document.getElementById('history-list');
+  if (hist.length === 0) {
+    list.innerHTML = '<div class="history-empty">Aucune génération pour cette plateforme</div>';
+    return;
+  }
+  list.innerHTML = '';
+  hist.slice(0, 8).forEach((h, i) => {
+    const globalIdx = getHistory().findIndex((x, gi) => x.platform === platformId && JSON.stringify(x) === JSON.stringify(h));
+    const d = new Date(h.date);
+    const ds = d.toLocaleDateString('fr-FR', { day:'2-digit', month:'short' }) + ' ' + d.toLocaleTimeString('fr-FR', { hour:'2-digit', minute:'2-digit' });
+    const item = document.createElement('div');
+    item.className = 'history-item';
+    item.innerHTML = `
+      <div class="history-platform-icon" style="background:${BG_COLORS[h.platform]}">${PLATFORM_LOGO_MINI[h.platform]}</div>
+      <div class="history-info">
+        <div class="history-top">
+          <div class="history-name">${h.influencer}</div>
+          <span class="history-tag">${h.model}</span>
+          <span class="history-tag">${h.fmt}</span>
+        </div>
+        <div class="history-prompt">${h.prompt}</div>
+      </div>
+      <div class="history-date">${ds}</div>
+      <button class="history-del" onclick="deleteHist(${globalIdx})" title="Supprimer">×</button>`;
+    list.appendChild(item);
+  });
+}
+
+function deleteHist(i) {
+  const hist = getHistory();
+  hist.splice(i, 1);
+  setHistory(hist);
+  if (currentPlatformId) renderHistoryForPlatform(currentPlatformId);
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────
+function toast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2800);
+}
+
+// ─── KEYBOARD ─────────────────────────────────────────────────────
+document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
+
+// ─── INIT ─────────────────────────────────────────────────────────
+renderInfluencers();
+</script>
+</body>
+</html>
