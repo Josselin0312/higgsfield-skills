@@ -1,0 +1,865 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Agence AI — Tableau de Génération</title>
+<style>
+  :root {
+    --bg: #0f0f13;
+    --surface: #1a1a22;
+    --surface2: #22222e;
+    --border: #2e2e3e;
+    --accent: #7c6af7;
+    --accent2: #a78bfa;
+    --green: #34d399;
+    --pink: #f472b6;
+    --orange: #fb923c;
+    --blue: #60a5fa;
+    --text: #e2e8f0;
+    --muted: #94a3b8;
+    --radius: 14px;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    min-height: 100vh;
+    padding: 24px;
+  }
+
+  /* HEADER */
+  .header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 32px;
+  }
+  .header-left h1 {
+    font-size: 22px;
+    font-weight: 700;
+    letter-spacing: -0.5px;
+  }
+  .header-left h1 span { color: var(--accent2); }
+  .header-left p { color: var(--muted); font-size: 13px; margin-top: 4px; }
+  .badge {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 6px 14px;
+    font-size: 13px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .badge .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--green); }
+
+  /* INFLUENCER SELECTOR */
+  .section-title {
+    font-size: 11px;
+    text-transform: uppercase;
+    letter-spacing: 1.5px;
+    color: var(--muted);
+    margin-bottom: 12px;
+    font-weight: 600;
+  }
+  .influencers-row {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 32px;
+    flex-wrap: wrap;
+  }
+  .influencer-chip {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 13px;
+    cursor: pointer;
+    transition: all 0.15s;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+  .influencer-chip:hover { border-color: var(--accent); color: var(--accent2); }
+  .influencer-chip.active { background: var(--accent); border-color: var(--accent); color: white; }
+  .influencer-chip .avatar {
+    width: 24px; height: 24px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, var(--accent), var(--pink));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11px; font-weight: 700; color: white;
+  }
+  .add-influencer {
+    background: transparent;
+    border: 1px dashed var(--border);
+    border-radius: 999px;
+    padding: 8px 16px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .add-influencer:hover { border-color: var(--accent); color: var(--accent2); }
+
+  /* PLATFORM GRID */
+  .platforms-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 14px;
+    margin-bottom: 32px;
+  }
+  .platform-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 20px;
+    cursor: pointer;
+    transition: all 0.18s;
+    position: relative;
+    overflow: hidden;
+  }
+  .platform-card::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 3px;
+    opacity: 0;
+    transition: opacity 0.18s;
+  }
+  .platform-card:hover { border-color: var(--border); transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,0,0,0.3); }
+  .platform-card:hover::before { opacity: 1; }
+  .platform-card.active { border-color: currentColor; }
+  .platform-card.active::before { opacity: 1; }
+
+  .card-insta-feed::before, .card-insta-feed.active { --card-color: #e1306c; border-color: #e1306c44; }
+  .card-insta-feed::before { background: linear-gradient(90deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
+  .card-reels-cover::before, .card-reels-cover.active { border-color: #e1306c44; }
+  .card-reels-cover::before { background: linear-gradient(90deg, #f09433, #e6683c, #dc2743, #cc2366, #bc1888); }
+  .card-reels-video::before { background: linear-gradient(90deg, #f09433, #e6683c, #dc2743); }
+  .card-tiktok::before { background: linear-gradient(90deg, #010101, #69c9d0, #ee1d52); }
+  .card-threads::before { background: linear-gradient(90deg, #000, #444, #000); }
+
+  .platform-icon { font-size: 28px; margin-bottom: 12px; }
+  .platform-name { font-size: 14px; font-weight: 600; margin-bottom: 4px; }
+  .platform-sub { font-size: 12px; color: var(--muted); margin-bottom: 14px; }
+  .platform-tags { display: flex; gap: 6px; flex-wrap: wrap; }
+  .tag {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 3px 8px;
+    font-size: 11px;
+    color: var(--muted);
+    font-weight: 500;
+  }
+  .tag.accent { background: rgba(124,106,247,0.15); border-color: rgba(124,106,247,0.3); color: var(--accent2); }
+
+  /* GENERATOR PANEL */
+  .generator {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 24px;
+    margin-bottom: 32px;
+    display: none;
+  }
+  .generator.visible { display: block; }
+  .generator-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 20px;
+  }
+  .generator-title { font-size: 16px; font-weight: 600; }
+  .close-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 4px 10px;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 13px;
+  }
+  .close-btn:hover { color: var(--text); }
+
+  .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
+  .form-group { display: flex; flex-direction: column; gap: 8px; }
+  .form-group.full { grid-column: 1 / -1; }
+  label { font-size: 12px; color: var(--muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.8px; }
+  input, textarea, select {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+    color: var(--text);
+    font-size: 14px;
+    font-family: inherit;
+    transition: border-color 0.15s;
+    outline: none;
+    width: 100%;
+  }
+  input:focus, textarea:focus, select:focus { border-color: var(--accent); }
+  textarea { resize: vertical; min-height: 90px; }
+  select option { background: var(--surface2); }
+
+  .format-options { display: flex; gap: 8px; flex-wrap: wrap; }
+  .format-btn {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 14px;
+    font-size: 13px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .format-btn:hover { border-color: var(--accent); color: var(--accent2); }
+  .format-btn.active { background: rgba(124,106,247,0.2); border-color: var(--accent); color: var(--accent2); }
+
+  .model-info {
+    background: rgba(124,106,247,0.08);
+    border: 1px solid rgba(124,106,247,0.2);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 13px;
+    color: var(--muted);
+    margin-top: 4px;
+  }
+  .model-info strong { color: var(--accent2); }
+
+  .generate-btn {
+    background: linear-gradient(135deg, var(--accent), #6366f1);
+    border: none;
+    border-radius: 10px;
+    padding: 12px 24px;
+    color: white;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    width: 100%;
+    margin-top: 20px;
+    transition: opacity 0.15s, transform 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+  }
+  .generate-btn:hover { opacity: 0.9; transform: translateY(-1px); }
+  .generate-btn:active { transform: translateY(0); }
+
+  /* COMMAND OUTPUT */
+  .command-output {
+    display: none;
+    background: #0d1117;
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+    margin-top: 16px;
+    position: relative;
+  }
+  .command-output.visible { display: block; }
+  .command-output pre {
+    font-family: 'SF Mono', 'Fira Code', monospace;
+    font-size: 13px;
+    color: var(--green);
+    white-space: pre-wrap;
+    word-break: break-all;
+  }
+  .copy-btn {
+    position: absolute;
+    top: 12px; right: 12px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 7px;
+    padding: 4px 10px;
+    font-size: 12px;
+    color: var(--muted);
+    cursor: pointer;
+    transition: all 0.15s;
+  }
+  .copy-btn:hover { color: var(--green); border-color: var(--green); }
+  .copy-btn.copied { color: var(--green); border-color: var(--green); }
+
+  /* HISTORY */
+  .history-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+    gap: 12px;
+  }
+  .history-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 16px;
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+  }
+  .history-card-top {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .history-platform {
+    font-size: 12px;
+    font-weight: 600;
+    color: var(--accent2);
+    display: flex;
+    align-items: center;
+    gap: 6px;
+  }
+  .history-date { font-size: 11px; color: var(--muted); }
+  .history-influencer {
+    font-size: 13px;
+    font-weight: 600;
+  }
+  .history-prompt {
+    font-size: 12px;
+    color: var(--muted);
+    line-height: 1.5;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+  .history-tags { display: flex; gap: 6px; }
+  .history-delete {
+    background: none;
+    border: none;
+    color: var(--muted);
+    font-size: 11px;
+    cursor: pointer;
+    padding: 0;
+    margin-top: 4px;
+    text-align: left;
+  }
+  .history-delete:hover { color: #f87171; }
+  .empty-history {
+    color: var(--muted);
+    font-size: 14px;
+    text-align: center;
+    padding: 32px;
+    grid-column: 1 / -1;
+    border: 1px dashed var(--border);
+    border-radius: var(--radius);
+  }
+
+  /* MODAL ADD INFLUENCER */
+  .modal-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(0,0,0,0.7);
+    z-index: 100;
+    align-items: center;
+    justify-content: center;
+  }
+  .modal-overlay.visible { display: flex; }
+  .modal {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 28px;
+    width: 400px;
+    max-width: 90vw;
+  }
+  .modal h3 { font-size: 16px; margin-bottom: 16px; }
+  .modal-actions { display: flex; gap: 10px; margin-top: 20px; }
+  .btn-primary {
+    background: var(--accent);
+    border: none;
+    border-radius: 8px;
+    padding: 9px 18px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    flex: 1;
+  }
+  .btn-secondary {
+    background: var(--surface2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 9px 18px;
+    color: var(--text);
+    font-size: 14px;
+    cursor: pointer;
+    flex: 1;
+  }
+
+  /* TOAST */
+  .toast {
+    position: fixed;
+    bottom: 24px;
+    left: 50%;
+    transform: translateX(-50%) translateY(60px);
+    background: var(--green);
+    color: #000;
+    padding: 10px 20px;
+    border-radius: 999px;
+    font-size: 14px;
+    font-weight: 600;
+    transition: transform 0.25s ease;
+    z-index: 200;
+  }
+  .toast.show { transform: translateX(-50%) translateY(0); }
+
+  /* DIVIDER */
+  .divider { border: none; border-top: 1px solid var(--border); margin: 28px 0; }
+
+  @media (max-width: 600px) {
+    body { padding: 16px; }
+    .form-grid { grid-template-columns: 1fr; }
+    .platforms-grid { grid-template-columns: repeat(2, 1fr); }
+    .header { flex-direction: column; align-items: flex-start; gap: 12px; }
+  }
+</style>
+</head>
+<body>
+
+<!-- TOAST -->
+<div class="toast" id="toast">✓ Copié dans le presse-papier !</div>
+
+<!-- MODAL AJOUT INFLUENCEUR -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal">
+    <h3>Ajouter un influenceur</h3>
+    <div class="form-group" style="margin-bottom:14px">
+      <label>Nom</label>
+      <input type="text" id="newInfluencerName" placeholder="ex: Sophie Martin">
+    </div>
+    <div class="form-group">
+      <label>Soul ID (optionnel)</label>
+      <input type="text" id="newInfluencerSoulId" placeholder="ex: soul_xxxxxxxx">
+      <span style="font-size:11px;color:var(--muted)">Le Soul ID est disponible après avoir entraîné un personnage Higgsfield</span>
+    </div>
+    <div class="modal-actions">
+      <button class="btn-secondary" onclick="closeModal()">Annuler</button>
+      <button class="btn-primary" onclick="saveInfluencer()">Ajouter</button>
+    </div>
+  </div>
+</div>
+
+<!-- HEADER -->
+<div class="header">
+  <div class="header-left">
+    <h1>Agence AI <span>/ Génération Contenu</span></h1>
+    <p>Centralise toutes tes générations image & vidéo Higgsfield</p>
+  </div>
+  <div class="badge">
+    <div class="dot"></div>
+    Higgsfield connecté
+  </div>
+</div>
+
+<!-- INFLUENCEURS -->
+<div class="section-title">Influenceurs</div>
+<div class="influencers-row" id="influencersRow">
+  <button class="add-influencer" onclick="openModal()">+ Ajouter un influenceur</button>
+</div>
+
+<!-- PLATEFORMES -->
+<div class="section-title">Choisir la plateforme</div>
+<div class="platforms-grid">
+
+  <div class="platform-card card-insta-feed" onclick="selectPlatform('insta-feed')">
+    <div class="platform-icon">📸</div>
+    <div class="platform-name">Instagram Feed</div>
+    <div class="platform-sub">Image pour le fil d'actualité</div>
+    <div class="platform-tags">
+      <span class="tag">4:5</span>
+      <span class="tag">1:1</span>
+      <span class="tag accent">Soul 2.0</span>
+    </div>
+  </div>
+
+  <div class="platform-card card-reels-cover" onclick="selectPlatform('reels-cover')">
+    <div class="platform-icon">🎬</div>
+    <div class="platform-name">Reels — Cover</div>
+    <div class="platform-sub">Image miniature du Reel</div>
+    <div class="platform-tags">
+      <span class="tag">9:16</span>
+      <span class="tag accent">Soul 2.0</span>
+    </div>
+  </div>
+
+  <div class="platform-card card-reels-video" onclick="selectPlatform('reels-video')">
+    <div class="platform-icon">▶️</div>
+    <div class="platform-name">Reels — Vidéo</div>
+    <div class="platform-sub">Vidéo verticale Instagram</div>
+    <div class="platform-tags">
+      <span class="tag">9:16</span>
+      <span class="tag">1080p</span>
+      <span class="tag accent">Seedance 2.0</span>
+    </div>
+  </div>
+
+  <div class="platform-card card-tiktok" onclick="selectPlatform('tiktok')">
+    <div class="platform-icon">🎵</div>
+    <div class="platform-name">TikTok</div>
+    <div class="platform-sub">Vidéo courte verticale</div>
+    <div class="platform-tags">
+      <span class="tag">9:16</span>
+      <span class="tag">1080p</span>
+      <span class="tag accent">Kling 3.0</span>
+    </div>
+  </div>
+
+  <div class="platform-card card-threads" onclick="selectPlatform('threads')">
+    <div class="platform-icon">💬</div>
+    <div class="platform-name">Threads</div>
+    <div class="platform-sub">Image authentique / lifestyle</div>
+    <div class="platform-tags">
+      <span class="tag">1:1</span>
+      <span class="tag">4:5</span>
+      <span class="tag accent">Nano Banana Pro</span>
+    </div>
+  </div>
+
+</div>
+
+<!-- GENERATOR PANEL -->
+<div class="generator" id="generatorPanel">
+  <div class="generator-header">
+    <div class="generator-title" id="generatorTitle">Générer un contenu</div>
+    <button class="close-btn" onclick="closeGenerator()">✕ Fermer</button>
+  </div>
+
+  <div class="form-grid">
+    <div class="form-group">
+      <label>Influenceur</label>
+      <select id="genInfluencer">
+        <option value="">— Aucun (générique) —</option>
+      </select>
+    </div>
+    <div class="form-group">
+      <label>Format</label>
+      <div class="format-options" id="formatOptions"></div>
+    </div>
+    <div class="form-group full">
+      <label>Description du contenu</label>
+      <textarea id="genPrompt" placeholder="Décris le visuel : ambiance, tenue, lieu, action, émotion…"></textarea>
+    </div>
+    <div class="form-group full">
+      <label>Type de contenu</label>
+      <div class="format-options" id="typeOptions"></div>
+    </div>
+    <div class="form-group full">
+      <div class="model-info" id="modelInfo"></div>
+    </div>
+  </div>
+
+  <button class="generate-btn" onclick="generate()">
+    ✦ Générer la commande
+  </button>
+
+  <div class="command-output" id="commandOutput">
+    <button class="copy-btn" id="copyBtn" onclick="copyCommand()">Copier</button>
+    <pre id="commandText"></pre>
+  </div>
+</div>
+
+<hr class="divider">
+
+<!-- HISTORIQUE -->
+<div class="section-title">Historique des générations</div>
+<div class="history-grid" id="historyGrid">
+  <div class="empty-history">Aucune génération pour l'instant.<br>Clique sur une plateforme pour commencer.</div>
+</div>
+
+<script>
+// ─── STATE ───────────────────────────────────────────────────────────────────
+let currentPlatform = null;
+let selectedFormat = null;
+let selectedType = null;
+
+const PLATFORMS = {
+  'insta-feed': {
+    label: '📸 Instagram Feed',
+    icon: '📸',
+    formats: ['4:5', '1:1'],
+    types: ['photo', 'lifestyle', 'produit'],
+    typeLabels: { photo: 'Portrait', lifestyle: 'Lifestyle', produit: 'Produit' },
+    models: { photo: 'soul_2', lifestyle: 'nano_banana_2', produit: 'marketing_studio_image' },
+    modelInfo: { photo: '<strong>soul_2</strong> — Portrait réaliste influenceur (UGC/mode)', lifestyle: '<strong>nano_banana_2</strong> — Qualité maximale, photo lifestyle', produit: '<strong>marketing_studio_image</strong> — Pub produit social, one-click' },
+    skillBase: 'gen-instagram-feed',
+    defaultFormat: '4:5',
+    defaultType: 'photo'
+  },
+  'reels-cover': {
+    label: '🎬 Reels Cover',
+    icon: '🎬',
+    formats: ['9:16'],
+    types: ['portrait', 'editorial'],
+    typeLabels: { portrait: 'Portrait', editorial: 'Éditorial' },
+    models: { portrait: 'soul_2', editorial: 'soul_cinematic' },
+    modelInfo: { portrait: '<strong>soul_2</strong> — UGC authentique, cohérence personnage', editorial: '<strong>soul_cinematic</strong> — Style éditorial, cinématique' },
+    skillBase: 'gen-reels',
+    defaultFormat: '9:16',
+    defaultType: 'portrait'
+  },
+  'reels-video': {
+    label: '▶️ Reels Vidéo',
+    icon: '▶️',
+    formats: ['9:16'],
+    types: ['ugc', 'ad', 'cinema'],
+    typeLabels: { ugc: 'UGC Authentique', ad: 'Publicité produit', cinema: 'Cinématique premium' },
+    models: { ugc: 'seedance_2_0', ad: 'marketing_studio_video', cinema: 'cinematic_studio_3_0' },
+    modelInfo: { ugc: '<strong>seedance_2_0</strong> — Identité cohérente, référence image', ad: '<strong>marketing_studio_video</strong> — One-click Reels/TikTok ready', cinema: '<strong>cinematic_studio_3_0</strong> — Qualité vidéo maximale' },
+    skillBase: 'gen-video-reel',
+    defaultFormat: '9:16',
+    defaultType: 'ugc'
+  },
+  'tiktok': {
+    label: '🎵 TikTok',
+    icon: '🎵',
+    formats: ['9:16'],
+    types: ['ugc', 'trend', 'ad'],
+    typeLabels: { ugc: 'UGC Authentique', trend: 'Trend / Multi-shot', ad: 'Publicité produit' },
+    models: { ugc: 'seedance_2_0', trend: 'kling3_0', ad: 'marketing_studio_video' },
+    modelInfo: { ugc: '<strong>seedance_2_0</strong> — Identité stable, référence image', trend: '<strong>kling3_0</strong> — Multi-shot, audio sync, transitions', ad: '<strong>marketing_studio_video</strong> — TikTok/Reels ready' },
+    skillBase: 'gen-tiktok',
+    defaultFormat: '9:16',
+    defaultType: 'ugc'
+  },
+  'threads': {
+    label: '💬 Threads',
+    icon: '💬',
+    formats: ['1:1', '4:5'],
+    types: ['photo', 'graphic', 'text-visual'],
+    typeLabels: { photo: 'Photo lifestyle', graphic: 'Visuel graphique', 'text-visual': 'Texte + image' },
+    models: { photo: 'nano_banana_2', graphic: 'nano_banana_2', 'text-visual': 'gpt_image_2' },
+    modelInfo: { photo: '<strong>nano_banana_2</strong> — Qualité maximale, lifestyle authentique', graphic: '<strong>nano_banana_2</strong> — Visuels propres et modernes', 'text-visual': '<strong>gpt_image_2</strong> — Meilleur rendu de texte intégré' },
+    skillBase: 'gen-threads',
+    defaultFormat: '1:1',
+    defaultType: 'photo'
+  }
+};
+
+// ─── INFLUENCEURS ─────────────────────────────────────────────────────────────
+function loadInfluencers() {
+  return JSON.parse(localStorage.getItem('influencers') || '[]');
+}
+function saveInfluencers(list) {
+  localStorage.setItem('influencers', JSON.stringify(list));
+}
+function renderInfluencers() {
+  const list = loadInfluencers();
+  const row = document.getElementById('influencersRow');
+  row.innerHTML = '';
+  list.forEach((inf, i) => {
+    const chip = document.createElement('button');
+    chip.className = 'influencer-chip';
+    chip.innerHTML = `<div class="avatar">${inf.name.charAt(0).toUpperCase()}</div>${inf.name}`;
+    chip.dataset.index = i;
+    chip.title = inf.soulId ? `Soul ID: ${inf.soulId}` : 'Pas de Soul ID';
+    row.appendChild(chip);
+  });
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-influencer';
+  addBtn.textContent = '+ Ajouter un influenceur';
+  addBtn.onclick = openModal;
+  row.appendChild(addBtn);
+  updateInfluencerSelect();
+}
+function updateInfluencerSelect() {
+  const list = loadInfluencers();
+  const sel = document.getElementById('genInfluencer');
+  sel.innerHTML = '<option value="">— Aucun (générique) —</option>';
+  list.forEach((inf, i) => {
+    const opt = document.createElement('option');
+    opt.value = i;
+    opt.textContent = inf.soulId ? `${inf.name} (Soul entraîné ✓)` : `${inf.name}`;
+    sel.appendChild(opt);
+  });
+}
+function openModal() {
+  document.getElementById('modalOverlay').classList.add('visible');
+  document.getElementById('newInfluencerName').focus();
+}
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('visible');
+  document.getElementById('newInfluencerName').value = '';
+  document.getElementById('newInfluencerSoulId').value = '';
+}
+function saveInfluencer() {
+  const name = document.getElementById('newInfluencerName').value.trim();
+  if (!name) return;
+  const soulId = document.getElementById('newInfluencerSoulId').value.trim();
+  const list = loadInfluencers();
+  list.push({ name, soulId });
+  saveInfluencers(list);
+  renderInfluencers();
+  closeModal();
+  showToast('Influenceur ajouté !');
+}
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === document.getElementById('modalOverlay')) closeModal();
+});
+
+// ─── PLATFORM SELECTION ───────────────────────────────────────────────────────
+function selectPlatform(id) {
+  currentPlatform = id;
+  selectedFormat = null;
+  selectedType = null;
+  document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
+  const clicked = document.querySelector(`.card-${id}`);
+  if (clicked) clicked.classList.add('active');
+  const p = PLATFORMS[id];
+  document.getElementById('generatorTitle').textContent = `Générer — ${p.label}`;
+
+  const fmtDiv = document.getElementById('formatOptions');
+  fmtDiv.innerHTML = '';
+  p.formats.forEach(f => {
+    const btn = document.createElement('button');
+    btn.className = 'format-btn' + (f === p.defaultFormat ? ' active' : '');
+    btn.textContent = f;
+    btn.onclick = () => {
+      document.querySelectorAll('#formatOptions .format-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedFormat = f;
+    };
+    fmtDiv.appendChild(btn);
+    if (f === p.defaultFormat) selectedFormat = f;
+  });
+
+  const typeDiv = document.getElementById('typeOptions');
+  typeDiv.innerHTML = '';
+  p.types.forEach(t => {
+    const btn = document.createElement('button');
+    btn.className = 'format-btn' + (t === p.defaultType ? ' active' : '');
+    btn.textContent = p.typeLabels[t];
+    btn.onclick = () => {
+      document.querySelectorAll('#typeOptions .format-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      selectedType = t;
+      document.getElementById('modelInfo').innerHTML = p.modelInfo[t];
+    };
+    typeDiv.appendChild(btn);
+    if (t === p.defaultType) { selectedType = t; }
+  });
+  document.getElementById('modelInfo').innerHTML = p.modelInfo[p.defaultType];
+
+  document.getElementById('commandOutput').classList.remove('visible');
+  const panel = document.getElementById('generatorPanel');
+  panel.classList.add('visible');
+  panel.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function closeGenerator() {
+  document.getElementById('generatorPanel').classList.remove('visible');
+  document.querySelectorAll('.platform-card').forEach(c => c.classList.remove('active'));
+  currentPlatform = null;
+}
+
+// ─── GENERATE COMMAND ─────────────────────────────────────────────────────────
+function generate() {
+  if (!currentPlatform) return;
+  const p = PLATFORMS[currentPlatform];
+  const prompt = document.getElementById('genPrompt').value.trim();
+  if (!prompt) {
+    document.getElementById('genPrompt').focus();
+    document.getElementById('genPrompt').style.borderColor = '#f87171';
+    setTimeout(() => document.getElementById('genPrompt').style.borderColor = '', 1500);
+    return;
+  }
+
+  const format = selectedFormat || p.defaultFormat;
+  const type = selectedType || p.defaultType;
+  const model = p.models[type];
+
+  const influencerIdx = document.getElementById('genInfluencer').value;
+  const influencers = loadInfluencers();
+  let influencerName = '';
+  let soulIdPart = '';
+  if (influencerIdx !== '') {
+    const inf = influencers[parseInt(influencerIdx)];
+    influencerName = inf.name;
+    soulIdPart = inf.soulId ? ` soul_id="${inf.soulId}"` : '';
+  }
+
+  const infPart = influencerName ? ` influencer="${influencerName}"` : '';
+  const cmd = `/${p.skillBase}${infPart} format="${format}" type="${type}"\n\nPrompt: ${prompt}\n\nModèle: ${model}${soulIdPart}`;
+
+  document.getElementById('commandText').textContent = cmd;
+  document.getElementById('commandOutput').classList.add('visible');
+
+  saveToHistory({ platform: currentPlatform, label: p.label, icon: p.icon, influencer: influencerName || null, format, type, model, prompt, date: new Date().toISOString() });
+  renderHistory();
+}
+
+function copyCommand() {
+  const text = document.getElementById('commandText').textContent;
+  navigator.clipboard.writeText(text).then(() => {
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = '✓ Copié';
+    btn.classList.add('copied');
+    setTimeout(() => { btn.textContent = 'Copier'; btn.classList.remove('copied'); }, 2000);
+    showToast('Commande copiée ! Colle-la dans Claude Code.');
+  });
+}
+
+// ─── HISTORY ─────────────────────────────────────────────────────────────────
+function saveToHistory(entry) {
+  const history = JSON.parse(localStorage.getItem('genHistory') || '[]');
+  history.unshift(entry);
+  localStorage.setItem('genHistory', JSON.stringify(history.slice(0, 50)));
+}
+function deleteHistoryEntry(i) {
+  const history = JSON.parse(localStorage.getItem('genHistory') || '[]');
+  history.splice(i, 1);
+  localStorage.setItem('genHistory', JSON.stringify(history));
+  renderHistory();
+}
+function renderHistory() {
+  const history = JSON.parse(localStorage.getItem('genHistory') || '[]');
+  const grid = document.getElementById('historyGrid');
+  if (history.length === 0) {
+    grid.innerHTML = '<div class="empty-history">Aucune génération pour l\'instant.<br>Clique sur une plateforme pour commencer.</div>';
+    return;
+  }
+  grid.innerHTML = '';
+  history.forEach((h, i) => {
+    const d = new Date(h.date);
+    const dateStr = d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short' }) + ' · ' + d.toLocaleTimeString('fr-FR', { hour: '2-digit', minute: '2-digit' });
+    const card = document.createElement('div');
+    card.className = 'history-card';
+    card.innerHTML = `
+      <div class="history-card-top">
+        <div class="history-platform">${h.icon} ${h.label}</div>
+        <div class="history-date">${dateStr}</div>
+      </div>
+      <div class="history-influencer">${h.influencer || '—'}</div>
+      <div class="history-prompt">${h.prompt}</div>
+      <div class="history-tags">
+        <span class="tag">${h.format}</span>
+        <span class="tag accent">${h.model}</span>
+        <span class="tag">${h.type}</span>
+      </div>
+      <button class="history-delete" onclick="deleteHistoryEntry(${i})">✕ Supprimer</button>
+    `;
+    grid.appendChild(card);
+  });
+}
+
+// ─── TOAST ────────────────────────────────────────────────────────────────────
+function showToast(msg) {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.classList.add('show');
+  setTimeout(() => t.classList.remove('show'), 2500);
+}
+
+// ─── KEYBOARD ────────────────────────────────────────────────────────────────
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+renderInfluencers();
+renderHistory();
+</script>
+</body>
+</html>
