@@ -10,14 +10,10 @@ export default function Page() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  // Si compte actif → dashboard vide
+  // Si compte actif → redirige vers CRM
   if (activeAccount) {
-    return (
-      <div className="p-8">
-        <h1 className="text-3xl font-bold text-white mb-2">Dashboard</h1>
-        <p className="text-zinc-500 text-sm">@{activeAccount.username}</p>
-      </div>
-    );
+    if (typeof window !== "undefined") window.location.href = "/crm";
+    return null;
   }
 
   const handleAdd = () => {

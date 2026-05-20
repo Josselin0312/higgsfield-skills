@@ -9,10 +9,9 @@ import { useAccount } from "@/lib/accountStore";
 import { useState } from "react";
 
 const navItems = [
-  { href: "/", label: "Dashboard", icon: LayoutDashboard },
   { href: "/studio", label: "Studio", icon: ImagePlay },
-  { href: "/skills", label: "Skills IA", icon: Zap },
   { href: "/crm", label: "CRM DM", icon: MessageCircle },
+  { href: "/skills", label: "Skills IA", icon: Zap },
   { href: "/settings", label: "Paramètres", icon: Settings },
 ];
 
