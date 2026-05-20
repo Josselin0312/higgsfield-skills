@@ -50,7 +50,7 @@ export default function ChatView({ convo, onSend, onQualify, onDelete }: Props) 
   };
 
   return (
-    <div className="flex flex-col h-screen">
+    <div className="flex flex-col" style={{ height: "100vh" }}>
       {/* Header */}
       <div className="flex items-center justify-between px-5 py-3.5 border-b border-zinc-800 bg-zinc-950 flex-shrink-0">
         <div className="flex items-center gap-3">

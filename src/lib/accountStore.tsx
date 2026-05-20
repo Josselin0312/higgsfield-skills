@@ -1,12 +1,11 @@
 "use client";
 
-import { createContext, useContext, useState, type ReactNode } from "react";
+import { createContext, useContext, useState, useEffect, type ReactNode } from "react";
 
 export interface IGAccount {
   id: string;
   username: string;
   password: string;
-  avatar?: string;
   connected: boolean;
   addedAt: string;
 }
@@ -22,26 +21,51 @@ interface AccountContextType {
 
 const AccountContext = createContext<AccountContextType | null>(null);
 
-export function AccountProvider({ children }: { children: ReactNode }) {
-  const [accounts, setAccounts] = useState<IGAccount[]>([
-    { id: "1", username: "moncompte_ig", password: "••••••••", avatar: "", connected: true, addedAt: "2026-05-20" },
-  ]);
-  const [activeAccount, setActiveAccount] = useState<IGAccount | null>(null);
+const STORAGE_KEY = "igflow_accounts";
+const ACTIVE_KEY = "igflow_active";
 
-  const addAccount = (username: string, password: string) => {
-    const newAccount: IGAccount = {
-      id: Date.now().toString(),
-      username,
-      password,
-      connected: true,
-      addedAt: new Date().toISOString().split("T")[0],
-    };
-    setAccounts((prev) => [...prev, newAccount]);
+export function AccountProvider({ children }: { children: ReactNode }) {
+  const [accounts, setAccounts] = useState<IGAccount[]>([]);
+  const [activeAccount, setActiveAccount] = useState<IGAccount | null>(null);
+  const [ready, setReady] = useState(false);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      const savedActive = localStorage.getItem(ACTIVE_KEY);
+      if (saved) setAccounts(JSON.parse(saved));
+      else setAccounts([{ id: "1", username: "moncompte_ig", password: "", connected: true, addedAt: "2026-05-20" }]);
+      if (savedActive) setActiveAccount(JSON.parse(savedActive));
+    } catch {}
+    setReady(true);
+  }, []);
+
+  const persist = (list: IGAccount[]) => {
+    setAccounts(list);
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(list));
   };
 
-  const removeAccount = (id: string) => setAccounts((prev) => prev.filter((a) => a.id !== id));
-  const selectAccount = (account: IGAccount) => setActiveAccount(account);
-  const logout = () => setActiveAccount(null);
+  const addAccount = (username: string, password: string) => {
+    const a: IGAccount = { id: Date.now().toString(), username, password, connected: true, addedAt: new Date().toISOString().split("T")[0] };
+    persist([...accounts, a]);
+  };
+
+  const removeAccount = (id: string) => {
+    persist(accounts.filter((a) => a.id !== id));
+    if (activeAccount?.id === id) logout();
+  };
+
+  const selectAccount = (account: IGAccount) => {
+    setActiveAccount(account);
+    localStorage.setItem(ACTIVE_KEY, JSON.stringify(account));
+  };
+
+  const logout = () => {
+    setActiveAccount(null);
+    localStorage.removeItem(ACTIVE_KEY);
+  };
+
+  if (!ready) return null;
 
   return (
     <AccountContext.Provider value={{ accounts, activeAccount, addAccount, removeAccount, selectAccount, logout }}>

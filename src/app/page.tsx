@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useAccount } from "@/lib/accountStore";
 import { Plus, X, AtSign, Lock, Trash2, Camera } from "lucide-react";
+import Link from "next/link";
 
 export default function Page() {
   const { accounts, activeAccount, addAccount, removeAccount, selectAccount } = useAccount();
@@ -10,10 +11,16 @@ export default function Page() {
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
 
-  // Si compte actif → redirige vers CRM
+  // Compte actif → page d'accueil dans l'app
   if (activeAccount) {
-    if (typeof window !== "undefined") window.location.href = "/crm";
-    return null;
+    return (
+      <div className="p-8 flex flex-col items-center justify-center min-h-screen">
+        <p className="text-zinc-500 text-sm">Bienvenue sur IGFlow</p>
+        <Link href="/crm" className="mt-4 bg-white text-black font-semibold px-6 py-3 rounded-xl hover:bg-zinc-200 transition-colors">
+          Aller au CRM DM →
+        </Link>
+      </div>
+    );
   }
 
   const handleAdd = () => {
@@ -78,35 +85,20 @@ export default function Page() {
           <div className="bg-zinc-900 border border-zinc-700 rounded-2xl p-5 space-y-3">
             <div className="flex items-center justify-between mb-1">
               <p className="text-sm font-semibold text-white">Nouveau compte</p>
-              <button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white">
-                <X className="w-4 h-4" />
-              </button>
+              <button onClick={() => setShowForm(false)} className="text-zinc-500 hover:text-white"><X className="w-4 h-4" /></button>
             </div>
             <div className="relative">
               <AtSign className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-              <input
-                type="text"
-                placeholder="Identifiant Instagram"
-                value={username}
-                onChange={(e) => setUsername(e.target.value)}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-              />
+              <input type="text" placeholder="Identifiant Instagram" value={username} onChange={(e) => setUsername(e.target.value)}
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500" />
             </div>
             <div className="relative">
               <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
-              <input
-                type="password"
-                placeholder="Mot de passe"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
+              <input type="password" placeholder="Mot de passe" value={password} onChange={(e) => setPassword(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500"
-              />
+                className="w-full bg-zinc-800 border border-zinc-700 rounded-xl pl-9 pr-4 py-2.5 text-sm text-white placeholder-zinc-600 focus:outline-none focus:border-zinc-500" />
             </div>
-            <button
-              onClick={handleAdd}
-              className="w-full bg-white text-black font-semibold py-2.5 rounded-xl text-sm hover:bg-zinc-200 transition-colors"
-            >
+            <button onClick={handleAdd} className="w-full bg-white text-black font-semibold py-2.5 rounded-xl text-sm hover:bg-zinc-200 transition-colors">
               Ajouter
             </button>
           </div>

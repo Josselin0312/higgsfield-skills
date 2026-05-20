@@ -57,7 +57,7 @@ export default function CRMPage() {
   });
 
   return (
-    <div className="flex h-screen overflow-hidden">
+    <div className="flex" style={{ height: "100vh" }}>
       {/* Left: list */}
       <div className="w-80 flex-shrink-0 border-r border-zinc-800 flex flex-col">
         <ConversationList
