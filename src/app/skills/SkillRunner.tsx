@@ -3,7 +3,23 @@
 import { useState } from "react";
 import { ArrowLeft, Copy, Check, Loader2, Sparkles, Save } from "lucide-react";
 import { type Skill } from "@/lib/skills";
-import { CATEGORY_LABELS, CATEGORY_COLORS } from "@/lib/skills";
+
+const CAT_STYLES: Record<string, React.CSSProperties> = {
+  hook: { background: "rgba(255,215,0,0.12)", color: "#ffd700", border: "1px solid rgba(255,215,0,0.3)" },
+  caption: { background: "rgba(0,229,255,0.1)", color: "#00e5ff", border: "1px solid rgba(0,229,255,0.25)" },
+  script: { background: "rgba(191,0,255,0.1)", color: "#bf80ff", border: "1px solid rgba(191,0,255,0.25)" },
+  visual: { background: "rgba(255,45,120,0.1)", color: "#ff2d78", border: "1px solid rgba(255,45,120,0.25)" },
+  dm: { background: "rgba(0,255,136,0.1)", color: "#00ff88", border: "1px solid rgba(0,255,136,0.25)" },
+};
+const CAT_LABELS: Record<string, string> = {
+  hook: "Hooks", caption: "Captions", script: "Scripts", visual: "Visuels", dm: "DM",
+};
+
+const inputStyle: React.CSSProperties = {
+  width: "100%", background: "#150d2a", border: "1px solid rgba(255,215,0,0.18)",
+  borderRadius: "12px", padding: "10px 14px", color: "white", fontSize: "14px",
+  outline: "none",
+};
 
 interface Props {
   skill: Skill;
@@ -19,32 +35,20 @@ export default function SkillRunner({ skill, onBack }: Props) {
 
   const handleRun = async () => {
     const missing = skill.inputs.find((i) => !inputs[i.id]?.trim());
-    if (missing) {
-      setError(`Remplis le champ "${missing.label}"`);
-      return;
-    }
-
-    setError("");
-    setLoading(true);
-    setOutput("");
+    if (missing) { setError(`Remplis le champ "${missing.label}"`); return; }
+    setError(""); setLoading(true); setOutput("");
 
     let prompt = skill.prompt;
-    skill.inputs.forEach((input) => {
-      prompt = prompt.replace(`{${input.id}}`, inputs[input.id] || "");
-    });
+    skill.inputs.forEach((input) => { prompt = prompt.replace(`{${input.id}}`, inputs[input.id] || ""); });
 
     try {
       const res = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
+        method: "POST", headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ prompt }),
       });
-
       if (!res.ok) throw new Error("Erreur API");
-
       const reader = res.body?.getReader();
       const decoder = new TextDecoder();
-
       if (reader) {
         while (true) {
           const { done, value } = await reader.read();
@@ -67,88 +71,66 @@ export default function SkillRunner({ skill, onBack }: Props) {
 
   return (
     <div className="max-w-3xl">
-      {/* Back */}
-      <button
-        onClick={onBack}
-        className="flex items-center gap-2 text-zinc-400 hover:text-white mb-6 transition-colors text-sm"
-      >
-        <ArrowLeft className="w-4 h-4" />
-        Retour aux Skills
+      <button onClick={onBack}
+        className="flex items-center gap-2 text-sm font-bold mb-6 transition-colors"
+        style={{ color: "rgba(255,215,0,0.5)" }}>
+        <ArrowLeft className="w-4 h-4" /> Retour aux Skills
       </button>
 
-      {/* Header */}
       <div className="flex items-center gap-4 mb-8">
-        <span className="text-4xl">{skill.icon}</span>
+        <span className="text-4xl" style={{ filter: "drop-shadow(0 0 12px rgba(255,215,0,0.4))" }}>{skill.icon}</span>
         <div>
           <div className="flex items-center gap-2 mb-1">
-            <h2 className="text-2xl font-bold text-white">{skill.name}</h2>
-            <span className={`text-xs font-medium px-2.5 py-1 rounded-full border ${CATEGORY_COLORS[skill.category]}`}>
-              {CATEGORY_LABELS[skill.category]}
+            <h2 className="text-2xl font-black text-white">{skill.name}</h2>
+            <span className="text-[10px] font-black px-2.5 py-1 rounded-full"
+              style={CAT_STYLES[skill.category] ?? {}}>
+              {CAT_LABELS[skill.category] ?? skill.category}
             </span>
           </div>
-          <p className="text-zinc-400">{skill.description}</p>
+          <p className="text-sm" style={{ color: "rgba(255,215,0,0.45)" }}>{skill.description}</p>
         </div>
       </div>
 
       <div className="grid grid-cols-2 gap-6">
         {/* Inputs */}
         <div className="space-y-4">
-          <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide">Paramètres</h3>
+          <h3 className="text-xs font-black tracking-widest" style={{ color: "rgba(255,215,0,0.4)" }}>♦ PARAMÈTRES</h3>
           {skill.inputs.map((input) => (
             <div key={input.id}>
-              <label className="block text-sm font-medium text-zinc-300 mb-1.5">
+              <label className="block text-xs font-bold mb-1.5 uppercase tracking-wide"
+                style={{ color: "rgba(255,215,0,0.55)" }}>
                 {input.label}
               </label>
               {input.type === "select" ? (
-                <select
-                  value={inputs[input.id] || ""}
+                <select value={inputs[input.id] || ""}
                   onChange={(e) => setInputs((prev) => ({ ...prev, [input.id]: e.target.value }))}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-zinc-500"
-                >
+                  style={{ ...inputStyle }}>
                   <option value="">Choisir...</option>
-                  {input.options?.map((opt) => (
-                    <option key={opt} value={opt}>{opt}</option>
-                  ))}
+                  {input.options?.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
                 </select>
               ) : input.type === "textarea" ? (
-                <textarea
-                  value={inputs[input.id] || ""}
+                <textarea value={inputs[input.id] || ""}
                   onChange={(e) => setInputs((prev) => ({ ...prev, [input.id]: e.target.value }))}
-                  placeholder={input.placeholder}
-                  rows={3}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-zinc-500 resize-none placeholder-zinc-600"
-                />
+                  placeholder={input.placeholder} rows={3}
+                  style={{ ...inputStyle, resize: "none" }} />
               ) : (
-                <input
-                  type="text"
-                  value={inputs[input.id] || ""}
+                <input type="text" value={inputs[input.id] || ""}
                   onChange={(e) => setInputs((prev) => ({ ...prev, [input.id]: e.target.value }))}
                   placeholder={input.placeholder}
-                  className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2.5 text-white text-sm focus:outline-none focus:border-zinc-500 placeholder-zinc-600"
-                />
+                  style={inputStyle} />
               )}
             </div>
           ))}
 
-          {error && (
-            <p className="text-red-400 text-sm">{error}</p>
-          )}
+          {error && <p className="text-sm font-bold" style={{ color: "#ff2d78" }}>{error}</p>}
 
-          <button
-            onClick={handleRun}
-            disabled={loading}
-            className="w-full flex items-center justify-center gap-2 bg-white text-black font-semibold py-3 rounded-xl hover:bg-zinc-200 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          >
+          <button onClick={handleRun} disabled={loading}
+            className="w-full flex items-center justify-center gap-2 font-black py-3 rounded-xl transition-all text-black disabled:opacity-50 disabled:cursor-not-allowed"
+            style={{ background: "linear-gradient(135deg, #ffd700, #ff8c00)", boxShadow: loading ? "none" : "0 0 20px rgba(255,215,0,0.35)" }}>
             {loading ? (
-              <>
-                <Loader2 className="w-4 h-4 animate-spin" />
-                Génération en cours...
-              </>
+              <><Loader2 className="w-4 h-4 animate-spin text-black" /> Génération en cours...</>
             ) : (
-              <>
-                <Sparkles className="w-4 h-4" />
-                Générer
-              </>
+              <><Sparkles className="w-4 h-4" /> Générer ♦</>
             )}
           </button>
         </div>
@@ -156,38 +138,39 @@ export default function SkillRunner({ skill, onBack }: Props) {
         {/* Output */}
         <div>
           <div className="flex items-center justify-between mb-1.5">
-            <h3 className="text-sm font-semibold text-zinc-300 uppercase tracking-wide">Résultat</h3>
+            <h3 className="text-xs font-black tracking-widest" style={{ color: "rgba(255,215,0,0.4)" }}>♦ RÉSULTAT</h3>
             {output && (
-              <div className="flex gap-2">
-                <button
-                  onClick={handleCopy}
-                  className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors"
-                >
-                  {copied ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
+              <div className="flex gap-3">
+                <button onClick={handleCopy}
+                  className="flex items-center gap-1.5 text-xs font-bold transition-colors"
+                  style={{ color: copied ? "#00ff88" : "rgba(255,215,0,0.5)" }}>
+                  {copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
                   {copied ? "Copié !" : "Copier"}
                 </button>
-                <button className="flex items-center gap-1.5 text-xs text-zinc-400 hover:text-white transition-colors">
-                  <Save className="w-3.5 h-3.5" />
-                  Sauvegarder
+                <button className="flex items-center gap-1.5 text-xs font-bold transition-colors"
+                  style={{ color: "rgba(255,215,0,0.5)" }}>
+                  <Save className="w-3.5 h-3.5" /> Sauvegarder
                 </button>
               </div>
             )}
           </div>
-          <div className="bg-zinc-900 border border-zinc-800 rounded-xl p-4 min-h-[320px] relative">
+          <div className="rounded-2xl p-4 min-h-[320px] relative"
+            style={{ background: "#140e28", border: "1px solid rgba(255,215,0,0.12)" }}>
             {!output && !loading && (
-              <div className="absolute inset-0 flex items-center justify-center">
-                <p className="text-zinc-600 text-sm text-center">
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2">
+                <span className="text-3xl" style={{ filter: "drop-shadow(0 0 10px rgba(255,215,0,0.2))" }}>♠</span>
+                <p className="text-xs text-center font-bold" style={{ color: "rgba(255,215,0,0.2)" }}>
                   Remplis les paramètres<br />et clique sur Générer
                 </p>
               </div>
             )}
             {loading && !output && (
               <div className="absolute inset-0 flex items-center justify-center">
-                <Loader2 className="w-6 h-6 text-zinc-500 animate-spin" />
+                <Loader2 className="w-6 h-6 animate-spin" style={{ color: "#ffd700" }} />
               </div>
             )}
             {output && (
-              <pre className="text-sm text-zinc-200 whitespace-pre-wrap leading-relaxed font-sans">
+              <pre className="text-sm leading-relaxed font-sans whitespace-pre-wrap" style={{ color: "rgba(255,255,255,0.9)" }}>
                 {output}
               </pre>
             )}

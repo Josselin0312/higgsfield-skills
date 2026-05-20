@@ -13,8 +13,9 @@ body {
 * { box-sizing: border-box; }
 
 ::-webkit-scrollbar { width: 4px; }
-::-webkit-scrollbar-track { background: transparent; }
-::-webkit-scrollbar-thumb { background: #333; border-radius: 4px; }
+::-webkit-scrollbar-track { background: #07050e; }
+::-webkit-scrollbar-thumb { background: rgba(255,215,0,0.2); border-radius: 2px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,215,0,0.4); }
 
 .glow-pink { box-shadow: 0 0 20px rgba(236, 72, 153, 0.3); }
 .glow-purple { box-shadow: 0 0 20px rgba(139, 92, 246, 0.3); }
