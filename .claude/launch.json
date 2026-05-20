@@ -1,0 +1,10 @@
+{
+  "servers": [
+    {
+      "name": "IGFlow Dev",
+      "command": "npm run dev",
+      "url": "http://localhost:3000",
+      "env": {}
+    }
+  ]
+}
