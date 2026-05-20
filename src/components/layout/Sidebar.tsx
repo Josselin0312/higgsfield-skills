@@ -3,8 +3,9 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { cn } from "@/lib/utils";
-import { LayoutDashboard, ImagePlay, MessageCircle, Settings, Camera, Zap, ChevronDown, Shield } from "lucide-react";
+import { LayoutDashboard, ImagePlay, MessageCircle, Settings, Camera, Zap, ChevronDown, Shield, LogOut } from "lucide-react";
 import { useRole } from "@/lib/role";
+import { useAccount } from "@/lib/accountStore";
 import { useState } from "react";
 
 const navItems = [
@@ -18,6 +19,7 @@ const navItems = [
 export default function Sidebar() {
   const pathname = usePathname();
   const { user, setUser, users } = useRole();
+  const { activeAccount, logout } = useAccount();
   const [open, setOpen] = useState(false);
 
   return (
@@ -50,21 +52,26 @@ export default function Sidebar() {
         })}
       </nav>
 
-      {/* User / Role switcher */}
-      <div className="px-4 py-4 border-t border-zinc-800 space-y-2">
-        {/* IG Account */}
-        <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-zinc-800">
-          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-xs font-bold text-white">
-            IG
+      {/* Active IG Account */}
+      {activeAccount && (
+        <div className="px-4 pb-2 border-t border-zinc-800 pt-3">
+          <div className="flex items-center gap-3 px-3 py-2.5 rounded-lg bg-zinc-800">
+            <div className="w-8 h-8 rounded-full bg-gradient-to-br from-pink-400 to-orange-400 flex items-center justify-center text-xs font-bold text-white">
+              {activeAccount.username[0]?.toUpperCase()}
+            </div>
+            <div className="flex-1 min-w-0">
+              <p className="text-xs text-white font-medium truncate">@{activeAccount.username}</p>
+              <p className="text-xs text-zinc-500">Compte actif</p>
+            </div>
+            <button onClick={logout} title="Changer de compte" className="text-zinc-500 hover:text-white transition-colors">
+              <LogOut className="w-3.5 h-3.5" />
+            </button>
           </div>
-          <div className="flex-1 min-w-0">
-            <p className="text-xs text-white font-medium truncate">@moncompte</p>
-            <p className="text-xs text-zinc-500">Connecté</p>
-          </div>
-          <div className="w-2 h-2 rounded-full bg-green-400" />
         </div>
+      )}
 
-        {/* Role switcher (demo) */}
+      {/* Role switcher */}
+      <div className="px-4 pb-4">
         <div className="relative">
           <button
             onClick={() => setOpen(!open)}
@@ -88,20 +95,14 @@ export default function Sidebar() {
 
           {open && (
             <div className="absolute bottom-full mb-1 left-0 right-0 bg-zinc-800 border border-zinc-700 rounded-xl overflow-hidden shadow-xl">
-              <p className="text-xs text-zinc-500 px-3 pt-2.5 pb-1.5 uppercase tracking-wide font-medium">Changer de profil</p>
+              <p className="text-xs text-zinc-500 px-3 pt-2.5 pb-1.5 uppercase tracking-wide font-medium">Profil</p>
               {users.map((u) => (
                 <button
                   key={u.name}
                   onClick={() => { setUser(u); setOpen(false); }}
-                  className={cn(
-                    "w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-zinc-700 transition-colors",
-                    user.name === u.name && "bg-zinc-700/50"
-                  )}
+                  className={cn("w-full flex items-center gap-2.5 px-3 py-2.5 text-sm hover:bg-zinc-700 transition-colors", user.name === u.name && "bg-zinc-700/50")}
                 >
-                  <div className={cn(
-                    "w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white",
-                    u.role === "admin" ? "bg-gradient-to-br from-purple-500 to-indigo-600" : "bg-gradient-to-br from-blue-400 to-cyan-500"
-                  )}>
+                  <div className={cn("w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold text-white", u.role === "admin" ? "bg-gradient-to-br from-purple-500 to-indigo-600" : "bg-gradient-to-br from-blue-400 to-cyan-500")}>
                     {u.name[0]}
                   </div>
                   <span className="text-white">{u.name}</span>
