@@ -28,11 +28,46 @@ export default function CRMPage() {
     setConvos((prev) => prev.map((c) => c.id === id ? { ...c, status: "qualified" as const } : c));
   };
 
+  const transferConvo = (convoId: string, status: "new" | "qualified") => {
+    setConvos((prev) => prev.map((c) => c.id !== convoId ? c : { ...c, status, isNew: status === "new" }));
+  };
+
   const sendMessage = (id: string, content: string, type: "text" | "audio" = "text", audioName?: string) => {
     setConvos((prev) => prev.map((c) => {
       if (c.id !== id) return c;
       const msg = { id: `m${Date.now()}`, from: "me" as const, type, content, audioName, seen: false, ts: new Date().toISOString() };
       return { ...c, messages: [...c.messages, msg], lastMessage: audioName ?? content, lastTs: msg.ts };
+    }));
+  };
+
+  const editMessage = (convoId: string, msgId: string, content: string) => {
+    setConvos((prev) => prev.map((c) => c.id !== convoId ? c : {
+      ...c,
+      messages: c.messages.map((m) => m.id !== msgId ? m : { ...m, content, edited: true }),
+    }));
+  };
+
+  const deleteMessage = (convoId: string, msgId: string) => {
+    setConvos((prev) => prev.map((c) => c.id !== convoId ? c : {
+      ...c,
+      messages: c.messages.map((m) => m.id !== msgId ? m : { ...m, deleted: true }),
+    }));
+  };
+
+  const addReaction = (convoId: string, msgId: string, emoji: string) => {
+    setConvos((prev) => prev.map((c) => c.id !== convoId ? c : {
+      ...c,
+      messages: c.messages.map((m) => {
+        if (m.id !== msgId) return m;
+        const reactions = m.reactions ?? [];
+        const hasIt = reactions.find((r) => r.from === "me" && r.emoji === emoji);
+        return {
+          ...m,
+          reactions: hasIt
+            ? reactions.filter((r) => !(r.from === "me" && r.emoji === emoji))
+            : [...reactions.filter((r) => r.from !== "me"), { emoji, from: "me" as const }],
+        };
+      }),
     }));
   };
 
@@ -55,26 +90,29 @@ export default function CRMPage() {
 
   return (
     <div className="flex h-full overflow-hidden">
-      <div className="w-72 flex-shrink-0 border-r border-white/5 flex flex-col overflow-hidden" style={{ background: "#0a0a0f" }}>
+      <div className="w-80 flex-shrink-0 border-r flex flex-col overflow-hidden" style={{ background: "#07050e", borderColor: "rgba(255,215,0,0.1)" }}>
         <ConversationList
           convos={filtered} filter={filter} counts={counts} search={search} selectedId={selectedId}
           onFilter={setFilter} onSearch={setSearch} onSelect={setSelectedId}
           onDelete={deleteConvo} onAccept={acceptRequest}
+          onTransfer={transferConvo}
         />
       </div>
-      <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#060608" }}>
+      <div className="flex-1 flex flex-col overflow-hidden" style={{ background: "#07050e" }}>
         {selected ? (
           <ChatView convo={selected}
             onSend={(content, type, audioName) => sendMessage(selected.id, content, type, audioName)}
             onQualify={() => setQualified(selected.id)}
             onDelete={() => deleteConvo(selected.id)}
+            onEditMessage={(msgId, content) => editMessage(selected.id, msgId, content)}
+            onDeleteMessage={(msgId) => deleteMessage(selected.id, msgId)}
+            onReact={(msgId, emoji) => addReaction(selected.id, msgId, emoji)}
+            onTransfer={(status) => transferConvo(selected.id, status)}
           />
         ) : (
-          <div className="flex-1 flex flex-col items-center justify-center gap-3">
-            <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "linear-gradient(135deg, #a855f720, #ec489920)" }}>
-              <span className="text-3xl">💬</span>
-            </div>
-            <p className="text-zinc-600 text-sm">Sélectionne une conversation</p>
+          <div className="flex-1 flex flex-col items-center justify-center gap-4">
+            <div className="text-5xl" style={{ filter: "drop-shadow(0 0 20px #ffd700)" }}>♠</div>
+            <p className="text-sm font-bold" style={{ color: "rgba(255,215,0,0.4)" }}>Sélectionne une conversation</p>
           </div>
         )}
       </div>

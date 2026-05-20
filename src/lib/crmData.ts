@@ -1,5 +1,10 @@
 import { type LeadStatus } from "./types";
 
+export interface Reaction {
+  emoji: string;
+  from: "me" | "them";
+}
+
 export interface Message {
   id: string;
   from: "me" | "them";
@@ -7,7 +12,10 @@ export interface Message {
   content: string;
   audioName?: string;
   reaction?: string;
+  reactions?: Reaction[];
   seen: boolean;
+  deleted?: boolean;
+  edited?: boolean;
   ts: string;
 }
 
