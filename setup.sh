@@ -36,8 +36,11 @@ cat > "$APP_PATH/Contents/MacOS/IGFlow" << 'EOF'
 #!/bin/bash
 APP_DIR="$HOME/.igflow"
 cd "$APP_DIR"
+npm run dev &
+echo "⏳ Démarrage..."
+until curl -sf http://localhost:3000 >/dev/null 2>&1; do sleep 1; done
 open http://localhost:3000
-npm run dev
+wait
 EOF
 
 chmod +x "$APP_PATH/Contents/MacOS/IGFlow"
