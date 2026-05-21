@@ -211,11 +211,45 @@ export default function GenerationPage() {
     }
   };
 
+  const uploadFromBrowser = async (base64: string): Promise<{ id: string; url: string }> => {
+    const [header, data] = base64.split(",");
+    const contentType = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+
+    const urlRes = await fetch("/api/upload-url", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ content_type: contentType }),
+    });
+    if (!urlRes.ok) throw new Error("Erreur obtention URL upload");
+    const { upload_url, public_url } = await urlRes.json();
+
+    const binary = atob(data);
+    const bytes = new Uint8Array(binary.length);
+    for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+
+    const putRes = await fetch(upload_url, {
+      method: "PUT",
+      headers: { "Content-Type": contentType },
+      body: bytes,
+    });
+    if (!putRes.ok) throw new Error(`Upload S3 échoué: ${putRes.status}`);
+
+    const id = public_url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? crypto.randomUUID();
+    return { id, url: public_url };
+  };
+
   const handleGenerate = async (id: string) => {
     const row = rowsBySection[activeSection].find((r) => r.id === id);
     if (!row || row.status === "loading") return;
     updateRow(id, { status: "loading", outputImages: [], errorMsg: undefined });
     try {
+      const refImages = row.imageInput.length > 0 ? row.imageInput : row.imageReproduction;
+
+      const uploaded = await Promise.all(
+        refImages.map((img) => img.startsWith("data:") ? uploadFromBrowser(img) : Promise.resolve({ id: img, url: img }))
+      );
+      const inputImages = uploaded.map(({ id, url }) => ({ id, type: "media_input", url }));
+
       const res = await fetch("/api/image-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -224,8 +258,7 @@ export default function GenerationPage() {
           resolution: row.resolution,
           quality: row.quality,
           count: row.count,
-          imageInput: row.imageInput,
-          imageReproduction: row.imageReproduction,
+          inputImages,
         }),
       });
       const data = await res.json();

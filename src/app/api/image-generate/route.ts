@@ -29,17 +29,9 @@ function makeClient() {
   });
 }
 
-async function uploadImage(client: HiggsfieldClient, base64: string): Promise<string> {
-  const [header, data] = base64.split(",");
-  const contentType = (header.match(/:(.*?);/)?.[1] ?? "image/jpeg") as "image/jpeg" | "image/png" | "image/webp";
-  const format = contentType.split("/")[1] as "jpeg" | "png" | "webp";
-  const buffer = Buffer.from(data, "base64");
-  return client.uploadImage(buffer, format);
-}
-
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, resolution, quality, count, imageInput = [], imageReproduction = [] } = await req.json();
+    const { prompt, resolution, quality, count, inputImages = [] } = await req.json();
 
     if (!prompt?.trim()) return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
 
@@ -48,40 +40,18 @@ export async function POST(req: NextRequest) {
     const actualCount = Math.min(Math.max(1, count), 8);
     const client = makeClient();
 
-    // Upload reference images
-    const refImages: string[] = imageInput.length > 0 ? imageInput : imageReproduction;
-    let input_images: Array<{ type: string; image_url: string }> = [];
-
-    if (refImages.length > 0) {
-      console.log("[image-generate] uploading", refImages.length, "image(s)...");
-      try {
-        const urls = await Promise.all(
-          refImages.map((img: string) =>
-            img.startsWith("data:") ? uploadImage(client, img) : Promise.resolve(img)
-          )
-        );
-        input_images = urls.map((url) => {
-        // Extract UUID from CDN URL filename: .../USER/UUID.ext
-        const id = url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? url;
-        return { id, type: "media_input", url };
-      });
-        console.log("[image-generate] uploaded:", urls.map(u => u.slice(0, 60)));
-      } catch (uploadErr) {
-        console.error("[image-generate] upload failed, continuing without ref images:", uploadErr);
-      }
-    }
-
-    // Try with input_images if we have them, fall back to empty for text-to-image
     const params: Record<string, unknown> = {
       prompt,
       aspect_ratio,
       resolution: res_param,
     };
-    if (input_images.length > 0) {
-      params.input_images = input_images;
+
+    if (inputImages.length > 0) {
+      params.input_images = inputImages;
+      console.log("[image-generate] using", inputImages.length, "pre-uploaded image(s):", JSON.stringify(inputImages[0]));
     }
 
-    console.log("[image-generate] generating, aspect:", aspect_ratio, "refs:", input_images.length);
+    console.log("[image-generate] generating, aspect:", aspect_ratio, "refs:", inputImages.length);
 
     const generateOne = async (): Promise<string | null> => {
       const jobSet = await client.generate("/v1/text2image/nano-banana", params, { withPolling: true });
