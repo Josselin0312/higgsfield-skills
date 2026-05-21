@@ -54,21 +54,28 @@ export async function POST(req: NextRequest) {
 
     if (refImages.length > 0) {
       console.log("[image-generate] uploading", refImages.length, "image(s)...");
-      const urls = await Promise.all(
-        refImages.map((img: string) =>
-          img.startsWith("data:") ? uploadImage(client, img) : Promise.resolve(img)
-        )
-      );
-      input_images = urls.map((url) => ({ type: "image_url", image_url: url }));
-      console.log("[image-generate] uploaded OK");
+      try {
+        const urls = await Promise.all(
+          refImages.map((img: string) =>
+            img.startsWith("data:") ? uploadImage(client, img) : Promise.resolve(img)
+          )
+        );
+        input_images = urls.map((url) => ({ type: "image_url", image_url: url }));
+        console.log("[image-generate] uploaded:", urls.map(u => u.slice(0, 60)));
+      } catch (uploadErr) {
+        console.error("[image-generate] upload failed, continuing without ref images:", uploadErr);
+      }
     }
 
-    const params = {
+    // Try with input_images if we have them, fall back to empty for text-to-image
+    const params: Record<string, unknown> = {
       prompt,
       aspect_ratio,
       resolution: res_param,
-      input_images,
     };
+    if (input_images.length > 0) {
+      params.input_images = input_images;
+    }
 
     console.log("[image-generate] generating, aspect:", aspect_ratio, "refs:", input_images.length);
 
