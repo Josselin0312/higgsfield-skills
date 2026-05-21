@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+import https from "https";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
 
-const BASE = "https://platform.higgsfield.ai";
+const BASE_HOST = "platform.higgsfield.ai";
 
 const ASPECT_RATIO: Record<string, string> = {
   "1024x1024": "1:1",
@@ -20,36 +21,84 @@ const QUALITY_MAP: Record<string, string> = {
   "4K": "4k",
 };
 
-// Candidates in order — all follow higgsfield-ai/{model}/standard pattern
 const MODEL_ENDPOINTS = [
-  "higgsfield-ai/nano-banana-2/standard",
-  "higgsfield-ai/nano-banana-pro/standard",
-  "higgsfield-ai/nano_banana_2/standard",
-  "higgsfield-ai/nano-banana/standard",
+  "/higgsfield-ai/nano-banana-2/standard",
+  "/higgsfield-ai/nano-banana-pro/standard",
+  "/higgsfield-ai/nano_banana_2/standard",
+  "/higgsfield-ai/nano-banana/standard",
 ];
 
 function authHeader() {
   return `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
 }
 
+function httpsPost(path: string, body: unknown): Promise<{ status: number; data: unknown }> {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const req = https.request(
+      {
+        hostname: BASE_HOST,
+        path,
+        method: "POST",
+        headers: {
+          Authorization: authHeader(),
+          "Content-Type": "application/json",
+          Accept: "application/json",
+          "Content-Length": Buffer.byteLength(payload),
+        },
+        timeout: 30000,
+      },
+      (res) => {
+        let raw = "";
+        res.on("data", (chunk) => (raw += chunk));
+        res.on("end", () => {
+          try { resolve({ status: res.statusCode ?? 0, data: JSON.parse(raw) }); }
+          catch { resolve({ status: res.statusCode ?? 0, data: raw }); }
+        });
+      }
+    );
+    req.on("timeout", () => { req.destroy(); reject(new Error("Request timeout (30s)")); });
+    req.on("error", reject);
+    req.write(payload);
+    req.end();
+  });
+}
+
+function httpsGet(path: string): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const req = https.request(
+      {
+        hostname: BASE_HOST,
+        path,
+        method: "GET",
+        headers: { Authorization: authHeader(), Accept: "application/json" },
+        timeout: 15000,
+      },
+      (res) => {
+        let raw = "";
+        res.on("data", (chunk) => (raw += chunk));
+        res.on("end", () => {
+          try { resolve(JSON.parse(raw)); }
+          catch { resolve(raw); }
+        });
+      }
+    );
+    req.on("timeout", () => { req.destroy(); reject(new Error("Poll timeout")); });
+    req.on("error", reject);
+    req.end();
+  });
+}
+
 async function uploadBase64(base64: string): Promise<string> {
   const [header, data] = base64.split(",");
   const contentType = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
+
+  const urlRes = await httpsPost("/files/generate-upload-url", { content_type: contentType });
+  if (urlRes.status >= 400) throw new Error(`Upload URL error ${urlRes.status}: ${JSON.stringify(urlRes.data)}`);
+  const { upload_url, public_url } = urlRes.data as { upload_url: string; public_url: string };
+
+  // PUT to upload_url (may be S3, use standard fetch)
   const buffer = Buffer.from(data, "base64");
-
-  // Step 1: get upload URL
-  const urlRes = await fetch(`${BASE}/files/generate-upload-url`, {
-    method: "POST",
-    headers: {
-      Authorization: authHeader(),
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({ content_type: contentType }),
-  });
-  if (!urlRes.ok) throw new Error(`Upload URL error ${urlRes.status}: ${await urlRes.text()}`);
-  const { upload_url, public_url } = await urlRes.json();
-
-  // Step 2: PUT the file
   await fetch(upload_url, {
     method: "PUT",
     headers: { "Content-Type": contentType },
@@ -62,46 +111,29 @@ async function uploadBase64(base64: string): Promise<string> {
 async function pollResult(requestId: string, maxMs = 240000): Promise<string | null> {
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 3000));
-    const res = await fetch(`${BASE}/requests/${requestId}/status`, {
-      headers: { Authorization: authHeader() },
-    });
-    if (!res.ok) continue;
-    const data = await res.json();
-    if (data.status === "completed") {
-      return data.images?.[0]?.url ?? data.video?.url ?? null;
-    }
-    if (data.status === "failed" || data.status === "nsfw") return null;
+    await new Promise((r) => setTimeout(r, 4000));
+    try {
+      const data = await httpsGet(`/requests/${requestId}/status`) as Record<string, unknown>;
+      if (data.status === "completed") {
+        const images = data.images as Array<{ url: string }> | undefined;
+        const video = data.video as { url: string } | undefined;
+        return images?.[0]?.url ?? video?.url ?? null;
+      }
+      if (data.status === "failed" || data.status === "nsfw") return null;
+    } catch { /* continue polling */ }
   }
   return null;
 }
 
-async function generateOne(
-  endpoint: string,
-  body: Record<string, unknown>
-): Promise<string | null> {
-  const res = await fetch(`${BASE}/${endpoint}`, {
-    method: "POST",
-    headers: {
-      Authorization: authHeader(),
-      "Content-Type": "application/json",
-      Accept: "application/json",
-    },
-    body: JSON.stringify(body),
-  });
+async function generateOne(endpoint: string, body: Record<string, unknown>): Promise<string | null> {
+  const res = await httpsPost(endpoint, body);
+  if (res.status >= 400) throw new Error(`${res.status}: ${JSON.stringify(res.data)}`);
 
-  if (!res.ok) {
-    const txt = await res.text();
-    throw new Error(`${res.status}: ${txt}`);
-  }
+  const data = res.data as Record<string, unknown>;
+  const images = data.images as Array<{ url: string }> | undefined;
+  if (images?.[0]?.url) return images[0].url;
 
-  const data = await res.json();
-
-  // Immediate result
-  if (data.images?.[0]?.url) return data.images[0].url;
-
-  // Async — poll
-  const requestId = data.request_id ?? data.id;
+  const requestId = (data.request_id ?? data.id) as string | undefined;
   if (requestId) return pollResult(requestId);
 
   return null;
@@ -109,26 +141,9 @@ async function generateOne(
 
 export async function POST(req: NextRequest) {
   try {
-    const { prompt, resolution, quality, count, imageInput = [], imageReproduction = [] } =
-      await req.json();
+    const { prompt, resolution, quality, count, imageInput = [], imageReproduction = [] } = await req.json();
 
-    if (!prompt?.trim()) {
-      return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
-    }
-
-    // Quick connectivity test
-    try {
-      const ping = await fetch(`${BASE}/health`, {
-        method: "GET",
-        headers: { Authorization: authHeader() },
-        signal: AbortSignal.timeout(8000),
-      });
-      console.log("[image-generate] ping status:", ping.status);
-    } catch (pingErr: unknown) {
-      const cause = (pingErr as any)?.cause;
-      const detail = `${pingErr instanceof Error ? pingErr.message : String(pingErr)}${cause ? ` | ${cause?.message ?? cause?.code ?? cause}` : ""}`;
-      return NextResponse.json({ error: `Connexion Higgsfield impossible: ${detail}` }, { status: 502 });
-    }
+    if (!prompt?.trim()) return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
 
     const aspect_ratio = ASPECT_RATIO[resolution] ?? "1:1";
     const res_quality = QUALITY_MAP[quality] ?? "1080p";
@@ -142,14 +157,10 @@ export async function POST(req: NextRequest) {
     );
     const input_images = uploadedUrls.map((url) => ({ type: "image_url", image_url: url }));
 
-    const body: Record<string, unknown> = {
-      prompt,
-      aspect_ratio,
-      resolution: res_quality,
-    };
+    const body: Record<string, unknown> = { prompt, aspect_ratio, resolution: res_quality };
     if (input_images.length > 0) body.input_images = input_images;
 
-    // Try each endpoint until one succeeds
+    // Try each endpoint until one works
     let lastError = "";
     let workingEndpoint = "";
     for (const endpoint of MODEL_ENDPOINTS) {
@@ -157,7 +168,6 @@ export async function POST(req: NextRequest) {
         const firstUrl = await generateOne(endpoint, body);
         workingEndpoint = endpoint;
 
-        // Generate remaining count-1 in parallel using the working endpoint
         const actualCount = Math.min(count, 8);
         const images: string[] = firstUrl ? [firstUrl] : [];
 
@@ -165,26 +175,19 @@ export async function POST(req: NextRequest) {
           const rest = await Promise.allSettled(
             Array.from({ length: actualCount - 1 }, () => generateOne(workingEndpoint, body))
           );
-          rest.forEach((r) => {
-            if (r.status === "fulfilled" && r.value) images.push(r.value);
-          });
+          rest.forEach((r) => { if (r.status === "fulfilled" && r.value) images.push(r.value); });
         }
 
         return NextResponse.json({ images, endpoint: workingEndpoint });
       } catch (err) {
-        const cause = (err as any)?.cause;
-        lastError = `${err instanceof Error ? err.message : String(err)}${cause ? ` | cause: ${cause?.message ?? cause?.code ?? cause}` : ""}`;
+        lastError = err instanceof Error ? err.message : String(err);
         console.error(`[image-generate] "${endpoint}" →`, lastError);
       }
     }
 
-    return NextResponse.json(
-      { error: `Échec tous les endpoints. Dernière erreur: ${lastError}` },
-      { status: 500 }
-    );
+    return NextResponse.json({ error: `Échec. Dernière erreur: ${lastError}` }, { status: 500 });
   } catch (err: unknown) {
-    const cause = (err as any)?.cause;
-    const msg = `${err instanceof Error ? err.message : String(err)}${cause ? ` (cause: ${cause?.message ?? cause})` : ""}`;
+    const msg = err instanceof Error ? err.message : String(err);
     console.error("[image-generate]", msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
