@@ -124,7 +124,9 @@ async function pollResult(requestId: string, maxMs = 240000): Promise<string | n
 }
 
 async function generateOne(params: Record<string, unknown>): Promise<string | null> {
+  console.log("[image-generate] POST /v1/text2image/nano-banana params:", JSON.stringify({ ...params, input_images: `[${(params.input_images as unknown[])?.length ?? 0} images]` }));
   const res = await httpsRequest("POST", "/v1/text2image/nano-banana", v1Headers(), { params });
+  console.log("[image-generate] response status:", res.status);
   if (res.status >= 400) throw new Error(`${res.status}: ${JSON.stringify(res.data)}`);
 
   const data = res.data as Record<string, unknown>;
@@ -155,10 +157,15 @@ export async function POST(req: NextRequest) {
     const actualCount = Math.min(Math.max(1, count), 8);
 
     // Upload reference images to Higgsfield CDN
+    console.log("[image-generate] uploading", refImages.length, "reference image(s)...");
     const uploadedUrls = await Promise.all(
-      refImages.map((img: string) =>
-        img.startsWith("data:") ? uploadBase64(img) : Promise.resolve(img)
-      )
+      refImages.map(async (img: string, i: number) => {
+        if (!img.startsWith("data:")) return img;
+        console.log(`[image-generate] uploading image ${i + 1}/${refImages.length}`);
+        const url = await uploadBase64(img);
+        console.log(`[image-generate] image ${i + 1} uploaded:`, url.slice(0, 60));
+        return url;
+      })
     );
     const input_images = uploadedUrls.map((url) => ({ type: "image_url", image_url: url }));
 
