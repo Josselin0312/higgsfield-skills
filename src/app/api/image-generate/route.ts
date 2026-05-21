@@ -47,7 +47,7 @@ export async function POST(req: NextRequest) {
     };
 
     if (inputImages.length > 0) {
-      params.input_images = inputImages;
+      params.input_images = inputImages; // format: [{type:"image_url", image_url: CDN_URL}]
       console.log("[image-generate] using", inputImages.length, "pre-uploaded image(s):", JSON.stringify(inputImages[0]));
     }
 

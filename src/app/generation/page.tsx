@@ -248,7 +248,7 @@ export default function GenerationPage() {
       const uploaded = await Promise.all(
         refImages.map((img) => img.startsWith("data:") ? uploadFromBrowser(img) : Promise.resolve({ id: img, url: img }))
       );
-      const inputImages = uploaded.map(({ id, url }) => ({ id, type: "media_input", url }));
+      const inputImages = uploaded.map(({ url }) => ({ type: "image_url", image_url: url }));
 
       const res = await fetch("/api/image-generate", {
         method: "POST",
