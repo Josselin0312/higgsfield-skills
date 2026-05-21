@@ -5,10 +5,6 @@ export const runtime = "nodejs";
 
 const BASE_HOST = "platform.higgsfield.ai";
 
-function authV2() {
-  return `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
-}
-
 function httpsPost(path: string, headers: Record<string, string>, body: unknown): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
@@ -29,45 +25,50 @@ function httpsPost(path: string, headers: Record<string, string>, body: unknown)
         });
       }
     );
-    req.on("timeout", () => { req.destroy(); reject(new Error("Timeout 15s")); });
-    req.on("error", (err) => reject(new Error(`Connexion: ${err.message}`)));
+    req.on("timeout", () => { req.destroy(); reject(new Error("Timeout")); });
+    req.on("error", (err) => reject(new Error(err.message)));
     req.write(payload);
     req.end();
   });
 }
 
 export async function GET() {
-  const v2Headers = {
-    Authorization: authV2(),
+  const v1Headers = {
+    "hf-api-key": process.env.HIGGSFIELD_KEY_ID ?? "",
+    "hf-secret": process.env.HIGGSFIELD_KEY_SECRET ?? "",
     "Content-Type": "application/json",
     Accept: "application/json",
   };
 
-  const candidates = [
-    "/higgsfield-ai/nano-banana-pro/standard",
-    "/higgsfield-ai/nano-banana-2-pro/standard",
-    "/higgsfield-ai/nano-banana-2/standard",
-    "/higgsfield-ai/nano-banana/standard",
-    "/higgsfield-ai/nanobanana-pro/standard",
-    "/higgsfield-ai/nanobanana2pro/standard",
-    "/higgsfield-ai/nano_banana_pro/standard",
-    "/higgsfield-ai/nb-pro/standard",
+  const v2Headers = {
+    Authorization: `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`,
+    "Content-Type": "application/json",
+    Accept: "application/json",
+  };
+
+  const tests = [
+    // V1 format (hf-api-key/hf-secret) + { params: {...} }
+    { label: "V1 /v1/text2image/nano-banana-pro", path: "/v1/text2image/nano-banana-pro", headers: v1Headers, body: { params: { prompt: "test", width_and_height: "1536x1536", quality: "720p", batch_size: 1 } } },
+    { label: "V1 /v1/text2image/nano-banana-2", path: "/v1/text2image/nano-banana-2", headers: v1Headers, body: { params: { prompt: "test", width_and_height: "1536x1536", quality: "720p", batch_size: 1 } } },
+    { label: "V1 /v1/text2image/nano-banana", path: "/v1/text2image/nano-banana", headers: v1Headers, body: { params: { prompt: "test", width_and_height: "1536x1536", quality: "720p", batch_size: 1 } } },
+    { label: "V1 /v1/text2image/nano_banana_pro", path: "/v1/text2image/nano_banana_pro", headers: v1Headers, body: { params: { prompt: "test", width_and_height: "1536x1536", quality: "720p", batch_size: 1 } } },
+    // V2 format (Authorization: Key) + { input: {...} }
+    { label: "V2 nano-banana-pro/text-to-image", path: "/nano-banana-pro/text-to-image", headers: v2Headers, body: { input: { prompt: "test", aspect_ratio: "1:1" } } },
+    { label: "V2 nano-banana-2/text-to-image", path: "/nano-banana-2/text-to-image", headers: v2Headers, body: { input: { prompt: "test", aspect_ratio: "1:1" } } },
+    { label: "V2 nano-banana-pro/standard", path: "/nano-banana-pro/standard", headers: v2Headers, body: { input: { prompt: "test", aspect_ratio: "1:1" } } },
   ];
 
-  const body = { prompt: "test", aspect_ratio: "1:1", resolution: "720p" };
-
   const results = await Promise.all(
-    candidates.map(async (path) => {
+    tests.map(async (t) => {
       try {
-        const res = await httpsPost(path, v2Headers, body);
-        return { path, status: res.status, data: res.data };
+        const res = await httpsPost(t.path, t.headers, t.body);
+        return { label: t.label, status: res.status, data: res.data };
       } catch (err) {
-        return { path, status: "error", data: err instanceof Error ? err.message : String(err) };
+        return { label: t.label, status: "error", data: err instanceof Error ? err.message : String(err) };
       }
     })
   );
 
-  // Highlight anything that's NOT 404
   const working = results.filter((r) => r.status !== 404 && r.status !== "error");
 
   return NextResponse.json({ working, all: results });
