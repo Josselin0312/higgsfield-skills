@@ -13,12 +13,15 @@ const ASPECT_RATIO: Record<string, string> = {
   "800x1200": "2:3",
 };
 
-// Candidate endpoints to try in order
+// Candidate endpoints — ordered by most likely based on Higgsfield CLI model slug "nano_banana_2"
 const ENDPOINTS = [
+  "nano_banana_2/text-to-image",
+  "/v1/text2image/nano_banana_2",
+  "nano-banana-2/text-to-image",
+  "/v1/generate/nano_banana_2",
+  "nano_banana_2",
   "nano-banana-pro/text-to-image",
   "/v1/text2image/nano-banana-pro",
-  "nano-banana/text-to-image",
-  "/v1/text2image/nano-banana",
 ];
 
 function makeClient() {
