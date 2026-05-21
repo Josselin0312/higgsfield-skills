@@ -37,8 +37,11 @@ if [ ! -f "$ENV_FILE" ]; then
   cat > "$ENV_FILE" << 'ENVEOF'
 HIGGSFIELD_KEY_ID=7fe50c52-bb38-474a-a502-160e0561698d
 HIGGSFIELD_KEY_SECRET=766643a0f5ebc54b442b5d4de45129b004f3fc23c745931c7649c93d9bdac147
+ANTHROPIC_API_KEY=
 ENVEOF
   echo "🔑 Clés API Higgsfield configurées"
+  echo "⚠️  Ajoute ta clé Anthropic dans $ENV_FILE"
+  echo "   ANTHROPIC_API_KEY=sk-ant-..."
 fi
 
 # 5. Crée SlideIn.app sur le Bureau

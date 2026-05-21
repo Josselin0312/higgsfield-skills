@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Clock, Plus, Trash2, Loader2, Image as ImageIcon, X, Play } from "lucide-react";
+import { Clock, Plus, Trash2, Loader2, Image as ImageIcon, X, Play, Sparkles } from "lucide-react";
 
 type GenSection = "feed" | "reels" | "script";
 
@@ -65,8 +65,11 @@ function make10(section: GenSection): GenRow[] {
 
 const cellStyle: React.CSSProperties = {
   borderRight: "1px solid rgba(255,215,0,0.06)",
-  padding: "8px",
-  verticalAlign: "top",
+  padding: "8px 6px",
+  display: "flex",
+  flexDirection: "column",
+  justifyContent: "flex-start",
+  alignItems: "stretch",
 };
 
 const inputStyle: React.CSSProperties = {
@@ -80,7 +83,7 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
-const COLS = "96px 96px 1fr 152px 90px 140px 72px 110px 96px 40px";
+const COLS = "96px 96px minmax(280px,1fr) 148px 82px 136px 66px 110px 96px 36px";
 
 interface ImageStackProps {
   images: string[];
@@ -135,6 +138,7 @@ export default function GenerationPage() {
     script: make10("script"),
   });
   const [dragOver, setDragOver] = useState<string | null>(null);
+  const [analyzing, setAnalyzing] = useState<Record<string, boolean>>({});
   const fileInputRef = useRef<HTMLInputElement>(null);
   const uploadTarget = useRef<{ id: string; field: "imageInput" | "imageReproduction" } | null>(null);
 
@@ -185,6 +189,26 @@ export default function GenerationPage() {
         r.id === rowId ? { ...r, [field]: r[field].filter((_, i) => i !== index) } : r
       ),
     }));
+  };
+
+  const handleAnalyzeGoal = async (id: string) => {
+    const row = rowsBySection[activeSection].find((r) => r.id === id);
+    if (!row || !row.imageReproduction[0]) return;
+    setAnalyzing((prev) => ({ ...prev, [id]: true }));
+    try {
+      const res = await fetch("/api/analyze-goal", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ goalImage: row.imageReproduction[0] }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erreur analyse");
+      updateRow(id, { prompt: data.prompt });
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "Erreur lors de l'analyse");
+    } finally {
+      setAnalyzing((prev) => ({ ...prev, [id]: false }));
+    }
   };
 
   const handleGenerate = async (id: string) => {
@@ -284,13 +308,13 @@ export default function GenerationPage() {
           {rows.map((row, idx) => (
             <div key={row.id}
               style={{
-                display: "grid", gridTemplateColumns: COLS, alignItems: "start",
+                display: "grid", gridTemplateColumns: COLS, alignItems: "stretch",
                 borderBottom: idx < rows.length - 1 ? "1px solid rgba(255,215,0,0.06)" : "none",
                 background: idx % 2 === 0 ? "#07050e" : "rgba(255,215,0,0.012)",
               }}>
 
               {/* Image Input */}
-              <div style={{ ...cellStyle, padding: "8px 4px" }}>
+              <div style={{ ...cellStyle, padding: "8px 4px", alignItems: "center" }}>
                 <ImageStack
                   images={row.imageInput}
                   accent="#ffd700"
@@ -305,7 +329,7 @@ export default function GenerationPage() {
               </div>
 
               {/* Goal */}
-              <div style={{ ...cellStyle, padding: "8px 4px" }}>
+              <div style={{ ...cellStyle, padding: "8px 4px", alignItems: "center" }}>
                 <ImageStack
                   images={row.imageReproduction}
                   accent="#ff2d78"
@@ -320,41 +344,56 @@ export default function GenerationPage() {
               </div>
 
               {/* Prompt */}
-              <div style={{ ...cellStyle, padding: "8px" }}>
-                <textarea value={row.prompt} onChange={(e) => updateRow(row.id, { prompt: e.target.value })}
-                  placeholder="Décris l'image à générer..."
-                  rows={2}
-                  style={{ ...inputStyle, resize: "none", minHeight: "58px" }} />
+              <div style={{ ...cellStyle, padding: "6px 8px" }}>
+                <div className="flex items-center justify-between mb-1.5">
+                  <span className="text-[9px] font-black tracking-widest uppercase" style={{ color: "rgba(255,215,0,0.3)" }}>Prompt</span>
+                  <button
+                    onClick={() => handleAnalyzeGoal(row.id)}
+                    disabled={!row.imageReproduction[0] || analyzing[row.id]}
+                    title={row.imageReproduction[0] ? "Analyser l'image Goal et générer le prompt" : "Ajoute d'abord une image dans Goal"}
+                    className="flex items-center gap-1 px-2 py-0.5 rounded-lg text-[10px] font-black transition-all disabled:opacity-30 disabled:cursor-not-allowed"
+                    style={{ background: "rgba(255,215,0,0.08)", border: "1px solid rgba(255,215,0,0.2)", color: "#ffd700" }}>
+                    {analyzing[row.id]
+                      ? <><Loader2 className="w-2.5 h-2.5 animate-spin" /> Analyse...</>
+                      : <><Sparkles className="w-2.5 h-2.5" /> Auto</>}
+                  </button>
+                </div>
+                <textarea
+                  value={row.prompt}
+                  onChange={(e) => updateRow(row.id, { prompt: e.target.value })}
+                  placeholder="Ajoute une image Goal puis clique ✨ Auto pour générer le prompt, ou écris-le manuellement..."
+                  rows={4}
+                  style={{ ...inputStyle, resize: "vertical", minHeight: "90px", fontSize: "11px", lineHeight: "1.5" }} />
               </div>
 
               {/* Resolution */}
-              <div style={cellStyle}>
+              <div style={{ ...cellStyle, padding: "8px 6px" }}>
                 <select value={row.resolution} onChange={(e) => updateRow(row.id, { resolution: e.target.value })}
-                  style={inputStyle}>
+                  style={{ ...inputStyle, fontSize: "11px" }}>
                   {RESOLUTIONS.map((r) => <option key={r.value} value={r.value}>{r.label}</option>)}
                 </select>
               </div>
 
               {/* Quality */}
-              <div style={cellStyle}>
+              <div style={{ ...cellStyle, padding: "8px 6px" }}>
                 <select value={row.quality} onChange={(e) => updateRow(row.id, { quality: e.target.value })}
-                  style={inputStyle}>
+                  style={{ ...inputStyle, fontSize: "11px" }}>
                   {QUALITIES.map((q) => <option key={q} value={q}>{q}</option>)}
                 </select>
               </div>
 
               {/* Model */}
-              <div style={cellStyle}>
+              <div style={{ ...cellStyle, padding: "8px 6px" }}>
                 <select value={row.model} onChange={(e) => updateRow(row.id, { model: e.target.value })}
-                  style={inputStyle}>
+                  style={{ ...inputStyle, fontSize: "11px" }}>
                   {MODELS.map((m) => <option key={m} value={m}>{m}</option>)}
                 </select>
               </div>
 
               {/* Count */}
-              <div style={cellStyle}>
+              <div style={{ ...cellStyle, padding: "8px 6px" }}>
                 <select value={row.count} onChange={(e) => updateRow(row.id, { count: parseInt(e.target.value) })}
-                  style={{ ...inputStyle, textAlign: "center", padding: "6px 4px" }}>
+                  style={{ ...inputStyle, fontSize: "11px", textAlign: "center", padding: "6px 4px" }}>
                   {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
                     <option key={n} value={n}>{n}</option>
                   ))}
@@ -362,7 +401,7 @@ export default function GenerationPage() {
               </div>
 
               {/* Start */}
-              <div style={{ ...cellStyle, padding: "8px" }} className="flex items-start justify-center pt-2">
+              <div style={{ ...cellStyle, padding: "8px", alignItems: "center", justifyContent: "center" }}>
                 <button
                   onClick={() => handleGenerate(row.id)}
                   disabled={row.status === "loading"}
@@ -383,8 +422,8 @@ export default function GenerationPage() {
               </div>
 
               {/* Output */}
-              <div style={{ ...cellStyle, padding: "8px 4px" }}>
-                <div className="flex flex-col gap-1 items-center">
+              <div style={{ ...cellStyle, padding: "8px 4px", alignItems: "center" }}>
+                <div className="flex flex-col gap-1 items-center w-full">
                   {row.status === "loading" && (
                     <div className="w-14 h-14 rounded-lg flex items-center justify-center"
                       style={{ background: "#140e28", border: "1px solid rgba(255,215,0,0.1)" }}>
@@ -417,7 +456,7 @@ export default function GenerationPage() {
               </div>
 
               {/* Delete */}
-              <div style={{ ...cellStyle, borderRight: "none" }} className="flex items-start justify-center pt-2">
+              <div style={{ ...cellStyle, borderRight: "none", alignItems: "center", justifyContent: "center" }}>
                 {rows.length > 1 && (
                   <button onClick={() => deleteRow(row.id)}
                     className="p-1.5 rounded-lg transition-colors"
