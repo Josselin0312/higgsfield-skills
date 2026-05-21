@@ -116,6 +116,20 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
     }
 
+    // Quick connectivity test
+    try {
+      const ping = await fetch(`${BASE}/health`, {
+        method: "GET",
+        headers: { Authorization: authHeader() },
+        signal: AbortSignal.timeout(8000),
+      });
+      console.log("[image-generate] ping status:", ping.status);
+    } catch (pingErr: unknown) {
+      const cause = (pingErr as any)?.cause;
+      const detail = `${pingErr instanceof Error ? pingErr.message : String(pingErr)}${cause ? ` | ${cause?.message ?? cause?.code ?? cause}` : ""}`;
+      return NextResponse.json({ error: `Connexion Higgsfield impossible: ${detail}` }, { status: 502 });
+    }
+
     const aspect_ratio = ASPECT_RATIO[resolution] ?? "1:1";
     const res_quality = QUALITY_MAP[quality] ?? "1080p";
 
@@ -158,7 +172,8 @@ export async function POST(req: NextRequest) {
 
         return NextResponse.json({ images, endpoint: workingEndpoint });
       } catch (err) {
-        lastError = err instanceof Error ? err.message : String(err);
+        const cause = (err as any)?.cause;
+        lastError = `${err instanceof Error ? err.message : String(err)}${cause ? ` | cause: ${cause?.message ?? cause?.code ?? cause}` : ""}`;
         console.error(`[image-generate] "${endpoint}" →`, lastError);
       }
     }
@@ -168,7 +183,8 @@ export async function POST(req: NextRequest) {
       { status: 500 }
     );
   } catch (err: unknown) {
-    const msg = err instanceof Error ? err.message : String(err);
+    const cause = (err as any)?.cause;
+    const msg = `${err instanceof Error ? err.message : String(err)}${cause ? ` (cause: ${cause?.message ?? cause})` : ""}`;
     console.error("[image-generate]", msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
