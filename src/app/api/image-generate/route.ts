@@ -22,6 +22,7 @@ const QUALITY_MAP: Record<string, string> = {
 };
 
 const MODEL_ENDPOINTS = [
+  "/higgsfield-ai/soul/standard",          // confirmed working format
   "/higgsfield-ai/nano-banana-2/standard",
   "/higgsfield-ai/nano-banana-pro/standard",
   "/higgsfield-ai/nano_banana_2/standard",
@@ -97,12 +98,30 @@ async function uploadBase64(base64: string): Promise<string> {
   if (urlRes.status >= 400) throw new Error(`Upload URL error ${urlRes.status}: ${JSON.stringify(urlRes.data)}`);
   const { upload_url, public_url } = urlRes.data as { upload_url: string; public_url: string };
 
-  // PUT to upload_url (may be S3, use standard fetch)
+  // PUT to the S3 upload URL using https module
   const buffer = Buffer.from(data, "base64");
-  await fetch(upload_url, {
-    method: "PUT",
-    headers: { "Content-Type": contentType },
-    body: buffer,
+  await new Promise<void>((resolve, reject) => {
+    const uploadUrl = new URL(upload_url);
+    const req = https.request(
+      {
+        hostname: uploadUrl.hostname,
+        path: uploadUrl.pathname + uploadUrl.search,
+        method: "PUT",
+        headers: {
+          "Content-Type": contentType,
+          "Content-Length": buffer.length,
+        },
+        timeout: 30000,
+      },
+      (res) => {
+        res.resume();
+        res.on("end", () => resolve());
+      }
+    );
+    req.on("timeout", () => { req.destroy(); reject(new Error("Upload timeout")); });
+    req.on("error", reject);
+    req.write(buffer);
+    req.end();
   });
 
   return public_url;
