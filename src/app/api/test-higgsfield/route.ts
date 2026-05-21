@@ -5,13 +5,8 @@ export const runtime = "nodejs";
 
 const BASE_HOST = "platform.higgsfield.ai";
 
-function v1Headers() {
-  return {
-    "hf-api-key": process.env.HIGGSFIELD_KEY_ID ?? "",
-    "hf-secret": process.env.HIGGSFIELD_KEY_SECRET ?? "",
-    "Content-Type": "application/json",
-    Accept: "application/json",
-  };
+function authV2() {
+  return `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
 }
 
 function httpsPost(path: string, headers: Record<string, string>, body: unknown): Promise<{ status: number; data: unknown }> {
@@ -35,38 +30,45 @@ function httpsPost(path: string, headers: Record<string, string>, body: unknown)
       }
     );
     req.on("timeout", () => { req.destroy(); reject(new Error("Timeout 15s")); });
-    req.on("error", (err) => reject(new Error(`Connexion échouée: ${err.message}`)));
+    req.on("error", (err) => reject(new Error(`Connexion: ${err.message}`)));
     req.write(payload);
     req.end();
   });
 }
 
 export async function GET() {
-  const results: Record<string, unknown> = {
-    keyId: process.env.HIGGSFIELD_KEY_ID ? `${process.env.HIGGSFIELD_KEY_ID.slice(0, 8)}...` : "MANQUANT",
-    keySecret: process.env.HIGGSFIELD_KEY_SECRET ? "présent" : "MANQUANT",
-    endpoints: [],
+  const v2Headers = {
+    Authorization: authV2(),
+    "Content-Type": "application/json",
+    Accept: "application/json",
   };
 
-  const tests = [
-    {
-      label: "Soul V1 (hf-api-key/hf-secret)",
-      path: "/v1/text2image/soul",
-      headers: v1Headers(),
-      body: { params: { prompt: "test", width_and_height: "1536x1536", quality: "720p", batch_size: 1 } },
-    },
+  const candidates = [
+    "/higgsfield-ai/nano-banana-pro/standard",
+    "/higgsfield-ai/nano-banana-2-pro/standard",
+    "/higgsfield-ai/nano-banana-2/standard",
+    "/higgsfield-ai/nano-banana/standard",
+    "/higgsfield-ai/nanobanana-pro/standard",
+    "/higgsfield-ai/nanobanana2pro/standard",
+    "/higgsfield-ai/nano_banana_pro/standard",
+    "/higgsfield-ai/nb-pro/standard",
   ];
 
-  const endpointResults = [];
-  for (const t of tests) {
-    try {
-      const res = await httpsPost(t.path, t.headers, t.body);
-      endpointResults.push({ endpoint: t.label, status: res.status, response: res.data });
-    } catch (err) {
-      endpointResults.push({ endpoint: t.label, status: "error", error: err instanceof Error ? err.message : String(err) });
-    }
-  }
+  const body = { prompt: "test", aspect_ratio: "1:1", resolution: "720p" };
 
-  results.endpoints = endpointResults;
-  return NextResponse.json(results);
+  const results = await Promise.all(
+    candidates.map(async (path) => {
+      try {
+        const res = await httpsPost(path, v2Headers, body);
+        return { path, status: res.status, data: res.data };
+      } catch (err) {
+        return { path, status: "error", data: err instanceof Error ? err.message : String(err) };
+      }
+    })
+  );
+
+  // Highlight anything that's NOT 404
+  const working = results.filter((r) => r.status !== 404 && r.status !== "error");
+
+  return NextResponse.json({ working, all: results });
 }
