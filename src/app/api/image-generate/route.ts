@@ -6,7 +6,15 @@ export const maxDuration = 300;
 
 const BASE_HOST = "platform.higgsfield.ai";
 
-// Map user resolution to Soul API width_and_height
+const ASPECT_RATIO: Record<string, string> = {
+  "1024x1024": "1:1",
+  "1080x1350": "4:5",
+  "1080x1920": "9:16",
+  "1920x1080": "16:9",
+  "1200x800":  "3:2",
+  "800x1200":  "2:3",
+};
+
 const SOUL_SIZE: Record<string, string> = {
   "1024x1024": "1536x1536",
   "1080x1350": "1152x1536",
@@ -16,8 +24,7 @@ const SOUL_SIZE: Record<string, string> = {
   "800x1200":  "1536x2048",
 };
 
-// Soul quality: 720p or 1080p only
-const SOUL_QUALITY: Record<string, string> = {
+const QUALITY_MAP: Record<string, string> = {
   "1K": "720p",
   "2K": "1080p",
   "4K": "1080p",
@@ -97,30 +104,6 @@ async function uploadBase64(base64: string): Promise<string> {
   return public_url;
 }
 
-async function createSoulId(imageUrls: string[]): Promise<string | null> {
-  const input_images = imageUrls.map((url) => ({ type: "image_url", image_url: url }));
-  const res = await httpsRequest("POST", "/v1/custom-references", v1Headers(), {
-    name: "ref-" + Date.now(),
-    input_images,
-  });
-  if (res.status >= 400) return null;
-
-  const data = res.data as Record<string, unknown>;
-  const id = (data.id ?? data.request_id) as string | undefined;
-  if (!id) return null;
-
-  // Poll until SoulId is ready (up to 120s)
-  const deadline = Date.now() + 120000;
-  while (Date.now() < deadline) {
-    await new Promise((r) => setTimeout(r, 3000));
-    const poll = await httpsRequest("GET", `/v1/custom-references/${id}`, v1Headers()) as { status: number; data: Record<string, unknown> };
-    const status = (poll.data as Record<string, unknown>).status as string | undefined;
-    if (status === "completed") return id;
-    if (status === "failed") return null;
-  }
-  return null;
-}
-
 async function pollResult(requestId: string, maxMs = 240000): Promise<string | null> {
   const deadline = Date.now() + maxMs;
   while (Date.now() < deadline) {
@@ -139,8 +122,8 @@ async function pollResult(requestId: string, maxMs = 240000): Promise<string | n
   return null;
 }
 
-async function generateSoul(params: Record<string, unknown>): Promise<string | null> {
-  const res = await httpsRequest("POST", "/v1/text2image/soul", v1Headers(), { params });
+async function generateOne(params: Record<string, unknown>): Promise<string | null> {
+  const res = await httpsRequest("POST", "/v1/text2image/nano-banana", v1Headers(), { params });
   if (res.status >= 400) throw new Error(`${res.status}: ${JSON.stringify(res.data)}`);
 
   const data = res.data as Record<string, unknown>;
@@ -159,45 +142,42 @@ export async function POST(req: NextRequest) {
 
     if (!prompt?.trim()) return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
 
-    const width_and_height = SOUL_SIZE[resolution] ?? "1536x2048";
-    const q = SOUL_QUALITY[quality] ?? "1080p";
-    const actualCount = Math.min(Math.max(1, count), 8);
-
-    // Upload reference images (Image Input)
-    let soulIdRef: string | null = null;
-    const allRefs = [...imageInput, ...imageReproduction].filter(Boolean);
-    if (allRefs.length > 0) {
-      try {
-        const uploadedUrls = await Promise.all(
-          allRefs.map((img: string) =>
-            img.startsWith("data:") ? uploadBase64(img) : Promise.resolve(img)
-          )
-        );
-        soulIdRef = await createSoulId(uploadedUrls);
-      } catch (err) {
-        console.error("[image-generate] SoulId creation failed, continuing without reference:", err);
-      }
+    // nano-banana requires input_images — use Image Input, fallback to Goal image
+    const refImages: string[] = imageInput.length > 0 ? imageInput : imageReproduction;
+    if (refImages.length === 0) {
+      return NextResponse.json({ error: "Ajoute au moins une image dans 'Image Input' (photo de référence de la personne)" }, { status: 400 });
     }
 
-    const soulParams: Record<string, unknown> = {
+    const aspect_ratio = ASPECT_RATIO[resolution] ?? "1:1";
+    const width_and_height = SOUL_SIZE[resolution] ?? "1536x1536";
+    const q = QUALITY_MAP[quality] ?? "1080p";
+    const actualCount = Math.min(Math.max(1, count), 8);
+
+    // Upload reference images to Higgsfield CDN
+    const uploadedUrls = await Promise.all(
+      refImages.map((img: string) =>
+        img.startsWith("data:") ? uploadBase64(img) : Promise.resolve(img)
+      )
+    );
+    const input_images = uploadedUrls.map((url) => ({ type: "image_url", image_url: url }));
+
+    const params: Record<string, unknown> = {
       prompt,
+      aspect_ratio,
       width_and_height,
       quality: q,
       batch_size: 1,
+      input_images,
     };
-    if (soulIdRef) {
-      soulParams.custom_reference_id = soulIdRef;
-      soulParams.custom_reference_strength = 1.0;
-    }
 
     // Generate first image
-    const firstUrl = await generateSoul(soulParams);
+    const firstUrl = await generateOne(params);
     const images: string[] = firstUrl ? [firstUrl] : [];
 
-    // Generate remaining images in parallel
+    // Generate remaining in parallel
     if (actualCount > 1) {
       const rest = await Promise.allSettled(
-        Array.from({ length: actualCount - 1 }, () => generateSoul(soulParams))
+        Array.from({ length: actualCount - 1 }, () => generateOne(params))
       );
       rest.forEach((r) => { if (r.status === "fulfilled" && r.value) images.push(r.value); });
     }
