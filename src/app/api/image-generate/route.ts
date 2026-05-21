@@ -60,7 +60,11 @@ export async function POST(req: NextRequest) {
             img.startsWith("data:") ? uploadImage(client, img) : Promise.resolve(img)
           )
         );
-        input_images = urls.map((url) => ({ type: "image_url", image_url: url }));
+        input_images = urls.map((url) => {
+        // Extract UUID from CDN URL filename: .../USER/UUID.ext
+        const id = url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? url;
+        return { id, type: "media_input", url };
+      });
         console.log("[image-generate] uploaded:", urls.map(u => u.slice(0, 60)));
       } catch (uploadErr) {
         console.error("[image-generate] upload failed, continuing without ref images:", uploadErr);
