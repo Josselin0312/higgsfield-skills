@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Clock, Plus, Trash2, Zap, Loader2, Image as ImageIcon } from "lucide-react";
+import { Clock, Plus, Trash2, Zap, Loader2, Image as ImageIcon, X } from "lucide-react";
 
 type GenSection = "feed" | "reels" | "script";
 
@@ -21,7 +21,6 @@ const RESOLUTIONS = [
 ];
 
 const QUALITIES = ["1K", "2K", "4K"];
-
 const MODELS = ["NanobananaPRO"];
 
 const DEFAULT_RESOLUTION: Record<GenSection, string> = {
@@ -32,8 +31,8 @@ const DEFAULT_RESOLUTION: Record<GenSection, string> = {
 
 interface GenRow {
   id: string;
-  imageInput: string | null;
-  imageReproduction: string | null;
+  imageInput: string[];
+  imageReproduction: string[];
   prompt: string;
   resolution: string;
   quality: string;
@@ -42,24 +41,29 @@ interface GenRow {
   status: "idle" | "loading" | "done";
 }
 
+let rowCounter = 0;
 function makeRow(section: GenSection): GenRow {
   return {
-    id: `${Date.now()}-${Math.random()}`,
-    imageInput: null,
-    imageReproduction: null,
+    id: `row-${++rowCounter}-${Math.random().toString(36).slice(2)}`,
+    imageInput: [],
+    imageReproduction: [],
     prompt: "",
     resolution: DEFAULT_RESOLUTION[section],
-    quality: "Standard",
-    model: "Flux Pro 1.1",
+    quality: "1K",
+    model: "NanobananaPRO",
     count: 1,
     status: "idle",
   };
 }
 
+function make10(section: GenSection): GenRow[] {
+  return Array.from({ length: 10 }, () => makeRow(section));
+}
+
 const cellStyle: React.CSSProperties = {
   borderRight: "1px solid rgba(255,215,0,0.06)",
   padding: "8px",
-  verticalAlign: "middle",
+  verticalAlign: "top",
 };
 
 const inputStyle: React.CSSProperties = {
@@ -73,14 +77,59 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
-const COLS = "80px 80px 1fr 152px 110px 150px 72px 90px 40px";
+const COLS = "96px 96px 1fr 152px 90px 140px 72px 96px 40px";
+
+interface ImageStackProps {
+  images: string[];
+  accent: string;
+  dragKey: string;
+  dragOver: string | null;
+  onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: () => void;
+  onDrop: (e: React.DragEvent) => void;
+  onAdd: () => void;
+  onRemove: (i: number) => void;
+}
+
+function ImageStack({ images, accent, dragKey, dragOver, onDragOver, onDragLeave, onDrop, onAdd, onRemove }: ImageStackProps) {
+  const isOver = dragOver === dragKey;
+  return (
+    <div className="flex flex-col gap-1 items-center"
+      onDragOver={onDragOver} onDragLeave={onDragLeave} onDrop={onDrop}>
+      {images.map((src, i) => (
+        <div key={i} className="relative group/thumb flex-shrink-0"
+          style={{ width: "56px", height: "56px" }}>
+          <img src={src} alt="" className="w-full h-full rounded-lg object-cover" />
+          <button
+            onClick={() => onRemove(i)}
+            className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center opacity-0 group-hover/thumb:opacity-100 transition-opacity"
+            style={{ background: "#ff2d78", color: "white" }}>
+            <X className="w-2.5 h-2.5" />
+          </button>
+        </div>
+      ))}
+      <button
+        onClick={onAdd}
+        className="flex-shrink-0 rounded-lg flex items-center justify-center cursor-pointer transition-all"
+        style={{
+          width: "56px", height: "56px",
+          border: isOver ? `1px solid ${accent}` : `1px dashed ${accent}44`,
+          background: isOver ? `${accent}14` : `${accent}06`,
+        }}>
+        {images.length === 0
+          ? <ImageIcon className="w-4 h-4" style={{ color: `${accent}44` }} />
+          : <Plus className="w-3.5 h-3.5" style={{ color: `${accent}66` }} />}
+      </button>
+    </div>
+  );
+}
 
 export default function GenerationPage() {
   const [activeSection, setActiveSection] = useState<GenSection>("feed");
   const [rowsBySection, setRowsBySection] = useState<Record<GenSection, GenRow[]>>({
-    feed: [makeRow("feed")],
-    reels: [makeRow("reels")],
-    script: [makeRow("script")],
+    feed: make10("feed"),
+    reels: make10("reels"),
+    script: make10("script"),
   });
   const [dragOver, setDragOver] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -109,10 +158,30 @@ export default function GenerationPage() {
     }));
   };
 
-  const loadImage = (file: File, rowId: string, field: "imageInput" | "imageReproduction") => {
-    const reader = new FileReader();
-    reader.onload = (e) => updateRow(rowId, { [field]: e.target?.result as string });
-    reader.readAsDataURL(file);
+  const appendImages = (files: File[], rowId: string, field: "imageInput" | "imageReproduction") => {
+    files.forEach((file) => {
+      if (!file.type.startsWith("image/")) return;
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        const result = e.target?.result as string;
+        setRowsBySection((prev) => ({
+          ...prev,
+          [activeSection]: prev[activeSection].map((r) =>
+            r.id === rowId ? { ...r, [field]: [...r[field], result] } : r
+          ),
+        }));
+      };
+      reader.readAsDataURL(file);
+    });
+  };
+
+  const removeImage = (rowId: string, field: "imageInput" | "imageReproduction", index: number) => {
+    setRowsBySection((prev) => ({
+      ...prev,
+      [activeSection]: prev[activeSection].map((r) =>
+        r.id === rowId ? { ...r, [field]: r[field].filter((_, i) => i !== index) } : r
+      ),
+    }));
   };
 
   const handleGenerate = (id: string) => {
@@ -174,7 +243,7 @@ export default function GenerationPage() {
           </button>
         </div>
 
-        <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(255,215,0,0.12)", minWidth: "860px" }}>
+        <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(255,215,0,0.12)", minWidth: "960px" }}>
           {/* Header */}
           <div style={{
             display: "grid", gridTemplateColumns: COLS,
@@ -192,45 +261,39 @@ export default function GenerationPage() {
           {rows.map((row, idx) => (
             <div key={row.id}
               style={{
-                display: "grid", gridTemplateColumns: COLS,
+                display: "grid", gridTemplateColumns: COLS, alignItems: "start",
                 borderBottom: idx < rows.length - 1 ? "1px solid rgba(255,215,0,0.06)" : "none",
                 background: idx % 2 === 0 ? "#07050e" : "rgba(255,215,0,0.012)",
               }}>
 
               {/* Image Input */}
-              <div style={cellStyle}>
-                <div
-                  onClick={() => { uploadTarget.current = { id: row.id, field: "imageInput" }; fileInputRef.current?.click(); }}
+              <div style={{ ...cellStyle, padding: "8px 4px" }}>
+                <ImageStack
+                  images={row.imageInput}
+                  accent="#ffd700"
+                  dragKey={`${row.id}-input`}
+                  dragOver={dragOver}
                   onDragOver={(e) => { e.preventDefault(); setDragOver(`${row.id}-input`); }}
                   onDragLeave={() => setDragOver(null)}
-                  onDrop={(e) => { e.preventDefault(); setDragOver(null); const f = e.dataTransfer.files[0]; if (f?.type.startsWith("image/")) loadImage(f, row.id, "imageInput"); }}
-                  className="w-14 h-14 rounded-lg flex items-center justify-center cursor-pointer overflow-hidden mx-auto transition-all"
-                  style={{
-                    border: dragOver === `${row.id}-input` ? "1px solid rgba(255,215,0,0.6)" : "1px dashed rgba(255,215,0,0.2)",
-                    background: dragOver === `${row.id}-input` ? "rgba(255,215,0,0.08)" : "rgba(255,215,0,0.03)",
-                  }}>
-                  {row.imageInput
-                    ? <img src={row.imageInput} alt="" className="w-full h-full object-cover" />
-                    : <ImageIcon className="w-4 h-4" style={{ color: "rgba(255,215,0,0.25)" }} />}
-                </div>
+                  onDrop={(e) => { e.preventDefault(); setDragOver(null); appendImages(Array.from(e.dataTransfer.files), row.id, "imageInput"); }}
+                  onAdd={() => { uploadTarget.current = { id: row.id, field: "imageInput" }; fileInputRef.current?.click(); }}
+                  onRemove={(i) => removeImage(row.id, "imageInput", i)}
+                />
               </div>
 
-              {/* Image Reproduction */}
-              <div style={cellStyle}>
-                <div
-                  onClick={() => { uploadTarget.current = { id: row.id, field: "imageReproduction" }; fileInputRef.current?.click(); }}
+              {/* Goal */}
+              <div style={{ ...cellStyle, padding: "8px 4px" }}>
+                <ImageStack
+                  images={row.imageReproduction}
+                  accent="#ff2d78"
+                  dragKey={`${row.id}-repro`}
+                  dragOver={dragOver}
                   onDragOver={(e) => { e.preventDefault(); setDragOver(`${row.id}-repro`); }}
                   onDragLeave={() => setDragOver(null)}
-                  onDrop={(e) => { e.preventDefault(); setDragOver(null); const f = e.dataTransfer.files[0]; if (f?.type.startsWith("image/")) loadImage(f, row.id, "imageReproduction"); }}
-                  className="w-14 h-14 rounded-lg flex items-center justify-center cursor-pointer overflow-hidden mx-auto transition-all"
-                  style={{
-                    border: dragOver === `${row.id}-repro` ? "1px solid rgba(255,45,120,0.6)" : "1px dashed rgba(255,45,120,0.2)",
-                    background: dragOver === `${row.id}-repro` ? "rgba(255,45,120,0.08)" : "rgba(255,45,120,0.03)",
-                  }}>
-                  {row.imageReproduction
-                    ? <img src={row.imageReproduction} alt="" className="w-full h-full object-cover" />
-                    : <ImageIcon className="w-4 h-4" style={{ color: "rgba(255,45,120,0.25)" }} />}
-                </div>
+                  onDrop={(e) => { e.preventDefault(); setDragOver(null); appendImages(Array.from(e.dataTransfer.files), row.id, "imageReproduction"); }}
+                  onAdd={() => { uploadTarget.current = { id: row.id, field: "imageReproduction" }; fileInputRef.current?.click(); }}
+                  onRemove={(i) => removeImage(row.id, "imageReproduction", i)}
+                />
               </div>
 
               {/* Prompt */}
@@ -276,20 +339,31 @@ export default function GenerationPage() {
               </div>
 
               {/* Output */}
-              <div style={{ ...cellStyle }}>
-                <div className="w-14 h-14 rounded-lg flex items-center justify-center mx-auto overflow-hidden"
-                  style={{ background: "#140e28", border: "1px solid rgba(255,215,0,0.1)" }}>
-                  {row.status === "loading"
-                    ? <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#ffd700" }} />
-                    : row.status === "done"
-                      ? <div className="w-full h-full flex items-center justify-center text-sm font-black text-white"
-                          style={{ background: "linear-gradient(135deg, #7c00ff, #ff2d78)" }}>✓</div>
-                      : <span style={{ color: "rgba(255,215,0,0.12)", fontSize: "18px" }}>—</span>}
+              <div style={{ ...cellStyle, padding: "8px 4px" }}>
+                <div className="flex flex-col gap-1 items-center">
+                  {row.status === "loading" && (
+                    <div className="w-14 h-14 rounded-lg flex items-center justify-center"
+                      style={{ background: "#140e28", border: "1px solid rgba(255,215,0,0.1)" }}>
+                      <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#ffd700" }} />
+                    </div>
+                  )}
+                  {row.status === "done" && Array.from({ length: row.count }).map((_, i) => (
+                    <div key={i} className="w-14 h-14 rounded-lg flex items-center justify-center text-xs font-black text-white"
+                      style={{ background: "linear-gradient(135deg, #7c00ff, #ff2d78)", flexShrink: 0 }}>
+                      ✓
+                    </div>
+                  ))}
+                  {row.status === "idle" && (
+                    <div className="w-14 h-14 rounded-lg flex items-center justify-center"
+                      style={{ background: "#140e28", border: "1px solid rgba(255,215,0,0.08)" }}>
+                      <span style={{ color: "rgba(255,215,0,0.12)", fontSize: "18px" }}>—</span>
+                    </div>
+                  )}
                 </div>
               </div>
 
               {/* Actions */}
-              <div style={{ ...cellStyle, borderRight: "none" }} className="flex flex-col items-center justify-center gap-1.5">
+              <div style={{ ...cellStyle, borderRight: "none" }} className="flex flex-col items-center justify-start gap-1.5 pt-2">
                 <button onClick={() => handleGenerate(row.id)} disabled={row.status === "loading"}
                   className="p-1.5 rounded-lg transition-all disabled:opacity-40"
                   style={{ background: "rgba(255,215,0,0.1)", color: "#ffd700" }} title="Générer">
@@ -315,11 +389,13 @@ export default function GenerationPage() {
         </div>
       </div>
 
-      {/* Hidden file input */}
-      <input ref={fileInputRef} type="file" accept="image/*" className="hidden"
+      {/* Hidden file input — multiple files allowed */}
+      <input ref={fileInputRef} type="file" accept="image/*" multiple className="hidden"
         onChange={(e) => {
-          const f = e.target.files?.[0];
-          if (f && uploadTarget.current) loadImage(f, uploadTarget.current.id, uploadTarget.current.field);
+          const files = Array.from(e.target.files || []);
+          if (files.length && uploadTarget.current) {
+            appendImages(files, uploadTarget.current.id, uploadTarget.current.field);
+          }
           e.target.value = "";
         }} />
     </div>
