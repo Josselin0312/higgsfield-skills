@@ -15,19 +15,10 @@ const ASPECT_RATIO: Record<string, string> = {
   "800x1200":  "2:3",
 };
 
-const SOUL_SIZE: Record<string, string> = {
-  "1024x1024": "1536x1536",
-  "1080x1350": "1152x1536",
-  "1080x1920": "1152x2048",
-  "1920x1080": "2048x1152",
-  "1200x800":  "2048x1536",
-  "800x1200":  "1536x2048",
-};
-
-const QUALITY_MAP: Record<string, string> = {
-  "1K": "720p",
-  "2K": "1080p",
-  "4K": "1080p",
+const RESOLUTION_MAP: Record<string, string> = {
+  "1K": "1k",
+  "2K": "2k",
+  "4K": "4k",
 };
 
 function v1Headers() {
@@ -124,9 +115,9 @@ async function pollResult(requestId: string, maxMs = 240000): Promise<string | n
 }
 
 async function generateOne(params: Record<string, unknown>): Promise<string | null> {
-  console.log("[image-generate] POST /v1/text2image/nano-banana params:", JSON.stringify({ ...params, input_images: `[${(params.input_images as unknown[])?.length ?? 0} images]` }));
-  const res = await httpsRequest("POST", "/v1/text2image/nano-banana", v1Headers(), { params });
-  console.log("[image-generate] response status:", res.status);
+  console.log("[image-generate] POST /v1/text2image/nano_banana_pro");
+  const res = await httpsRequest("POST", "/v1/text2image/nano_banana_pro", v1Headers(), { params });
+  console.log("[image-generate] status:", res.status, JSON.stringify(res.data).slice(0, 200));
   if (res.status >= 400) throw new Error(`${res.status}: ${JSON.stringify(res.data)}`);
 
   const data = res.data as Record<string, unknown>;
@@ -145,44 +136,40 @@ export async function POST(req: NextRequest) {
 
     if (!prompt?.trim()) return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
 
-    // nano-banana requires input_images — use Image Input, fallback to Goal image
-    const refImages: string[] = imageInput.length > 0 ? imageInput : imageReproduction;
-    if (refImages.length === 0) {
-      return NextResponse.json({ error: "Ajoute au moins une image dans 'Image Input' (photo de référence de la personne)" }, { status: 400 });
-    }
-
     const aspect_ratio = ASPECT_RATIO[resolution] ?? "1:1";
-    const width_and_height = SOUL_SIZE[resolution] ?? "1536x1536";
-    const q = QUALITY_MAP[quality] ?? "1080p";
+    const res_param = RESOLUTION_MAP[quality] ?? "1k";
     const actualCount = Math.min(Math.max(1, count), 8);
 
-    // Upload reference images to Higgsfield CDN
-    console.log("[image-generate] uploading", refImages.length, "reference image(s)...");
+    // nano_banana_pro requires reference images
+    const refImages: string[] = imageInput.length > 0 ? imageInput : imageReproduction;
+    if (refImages.length === 0) {
+      return NextResponse.json({ error: "Ajoute au moins une photo dans 'Image Input' (référence de la personne)" }, { status: 400 });
+    }
+
+    // Upload reference images
+    console.log("[image-generate] uploading", refImages.length, "image(s)...");
     const uploadedUrls = await Promise.all(
       refImages.map(async (img: string, i: number) => {
         if (!img.startsWith("data:")) return img;
         console.log(`[image-generate] uploading image ${i + 1}/${refImages.length}`);
         const url = await uploadBase64(img);
-        console.log(`[image-generate] image ${i + 1} uploaded:`, url.slice(0, 60));
+        console.log(`[image-generate] uploaded:`, url.slice(0, 80));
         return url;
       })
     );
+
     const input_images = uploadedUrls.map((url) => ({ type: "image_url", image_url: url }));
 
     const params: Record<string, unknown> = {
       prompt,
       aspect_ratio,
-      width_and_height,
-      quality: q,
-      batch_size: 1,
+      resolution: res_param,
       input_images,
     };
 
-    // Generate first image
     const firstUrl = await generateOne(params);
     const images: string[] = firstUrl ? [firstUrl] : [];
 
-    // Generate remaining in parallel
     if (actualCount > 1) {
       const rest = await Promise.allSettled(
         Array.from({ length: actualCount - 1 }, () => generateOne(params))
