@@ -290,7 +290,8 @@ export default function GenerationPage() {
           </button>
         </div>
 
-        <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(255,215,0,0.12)", minWidth: "960px" }}>
+        <div className="overflow-x-auto rounded-2xl" style={{ border: "1px solid rgba(255,215,0,0.12)" }}>
+        <div style={{ minWidth: "1100px" }}>
           {/* Header */}
           <div style={{
             display: "grid", gridTemplateColumns: COLS,
@@ -474,6 +475,7 @@ export default function GenerationPage() {
             style={{ borderTop: "1px solid rgba(255,215,0,0.06)", background: "rgba(255,215,0,0.015)", color: "rgba(255,215,0,0.28)" }}>
             <Plus className="w-3.5 h-3.5" /> Ajouter une ligne
           </button>
+        </div>
         </div>
       </div>
 
