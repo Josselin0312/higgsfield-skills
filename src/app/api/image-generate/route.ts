@@ -43,7 +43,8 @@ function httpsRequest(
   method: string,
   path: string,
   headers: Record<string, string>,
-  body?: unknown
+  body?: unknown,
+  timeoutMs = 120000
 ): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve, reject) => {
     const payload = body !== undefined ? JSON.stringify(body) : undefined;
@@ -56,7 +57,7 @@ function httpsRequest(
           ...headers,
           ...(payload ? { "Content-Length": Buffer.byteLength(payload) } : {}),
         },
-        timeout: 30000,
+        timeout: timeoutMs,
       },
       (res) => {
         let raw = "";
@@ -67,7 +68,7 @@ function httpsRequest(
         });
       }
     );
-    req.on("timeout", () => { req.destroy(); reject(new Error("Timeout 30s")); });
+    req.on("timeout", () => { req.destroy(); reject(new Error(`Timeout ${timeoutMs / 1000}s`)); });
     req.on("error", reject);
     if (payload) req.write(payload);
     req.end();
@@ -91,7 +92,7 @@ async function uploadBase64(base64: string): Promise<string> {
         path: uploadUrl.pathname + uploadUrl.search,
         method: "PUT",
         headers: { "Content-Type": contentType, "Content-Length": buffer.length },
-        timeout: 30000,
+        timeout: 120000,
       },
       (res) => { res.resume(); res.on("end", resolve); }
     );
@@ -109,7 +110,7 @@ async function pollResult(requestId: string, maxMs = 240000): Promise<string | n
   while (Date.now() < deadline) {
     await new Promise((r) => setTimeout(r, 4000));
     try {
-      const res = await httpsRequest("GET", `/requests/${requestId}/status`, v1Headers());
+      const res = await httpsRequest("GET", `/requests/${requestId}/status`, v1Headers(), undefined, 15000);
       const data = res.data as Record<string, unknown>;
       if (data.status === "completed") {
         const images = data.images as Array<{ url: string }> | undefined;
