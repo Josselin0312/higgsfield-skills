@@ -20,15 +20,9 @@ const RESOLUTIONS = [
   { label: "2:3 — 800×1200", value: "800x1200" },
 ];
 
-const QUALITIES = ["Draft", "Standard", "High", "Ultra"];
+const QUALITIES = ["1K", "2K", "4K"];
 
-const MODELS = [
-  "Flux Pro 1.1",
-  "Flux Dev",
-  "Flux Schnell",
-  "SDXL 1.0",
-  "Playground v3",
-];
+const MODELS = ["NanobananaPRO"];
 
 const DEFAULT_RESOLUTION: Record<GenSection, string> = {
   feed: "1080x1350",
@@ -186,7 +180,7 @@ export default function GenerationPage() {
             display: "grid", gridTemplateColumns: COLS,
             background: "#150d2a", borderBottom: "1px solid rgba(255,215,0,0.15)",
           }}>
-            {["Image Input", "Reproduction", "Prompt de génération", "Résolution", "Qualité", "Modèle", "Nbr", "Output", ""].map((col, i) => (
+            {["Image Input", "Goal", "Prompt de génération", "Résolution", "Qualité", "Modèle", "Nbr", "Output", ""].map((col, i) => (
               <div key={i} className="px-3 py-3 text-[10px] font-black tracking-widest uppercase"
                 style={{ color: "rgba(255,215,0,0.5)", borderRight: i < 8 ? "1px solid rgba(255,215,0,0.08)" : "none" }}>
                 {col}
@@ -273,9 +267,12 @@ export default function GenerationPage() {
 
               {/* Count */}
               <div style={cellStyle}>
-                <input type="number" value={row.count} min={1}
-                  onChange={(e) => updateRow(row.id, { count: Math.max(1, parseInt(e.target.value) || 1) })}
-                  style={{ ...inputStyle, textAlign: "center", padding: "6px 4px" }} />
+                <select value={row.count} onChange={(e) => updateRow(row.id, { count: parseInt(e.target.value) })}
+                  style={{ ...inputStyle, textAlign: "center", padding: "6px 4px" }}>
+                  {Array.from({ length: 20 }, (_, i) => i + 1).map((n) => (
+                    <option key={n} value={n}>{n}</option>
+                  ))}
+                </select>
               </div>
 
               {/* Output */}
