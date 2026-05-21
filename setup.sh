@@ -31,7 +31,17 @@ echo "📦 Installation des modules..."
 cd "$APP_DIR"
 npm install --silent
 
-# 4. Crée SlideIn.app sur le Bureau
+# 4. Crée .env.local avec les clés API si absent
+ENV_FILE="$APP_DIR/.env.local"
+if [ ! -f "$ENV_FILE" ]; then
+  cat > "$ENV_FILE" << 'ENVEOF'
+HIGGSFIELD_KEY_ID=7fe50c52-bb38-474a-a502-160e0561698d
+HIGGSFIELD_KEY_SECRET=766643a0f5ebc54b442b5d4de45129b004f3fc23c745931c7649c93d9bdac147
+ENVEOF
+  echo "🔑 Clés API Higgsfield configurées"
+fi
+
+# 5. Crée SlideIn.app sur le Bureau
 APP_PATH="$HOME/Desktop/SlideIn.app"
 mkdir -p "$APP_PATH/Contents/MacOS"
 

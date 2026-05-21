@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useRef } from "react";
-import { Clock, Plus, Trash2, Zap, Loader2, Image as ImageIcon, X } from "lucide-react";
+import { Clock, Plus, Trash2, Loader2, Image as ImageIcon, X, Play } from "lucide-react";
 
 type GenSection = "feed" | "reels" | "script";
 
@@ -38,7 +38,9 @@ interface GenRow {
   quality: string;
   model: string;
   count: number;
-  status: "idle" | "loading" | "done";
+  status: "idle" | "loading" | "done" | "error";
+  outputImages: string[];
+  errorMsg?: string;
 }
 
 let rowCounter = 0;
@@ -53,6 +55,7 @@ function makeRow(section: GenSection): GenRow {
     model: "NanobananaPRO",
     count: 1,
     status: "idle",
+    outputImages: [],
   };
 }
 
@@ -77,7 +80,7 @@ const inputStyle: React.CSSProperties = {
   outline: "none",
 };
 
-const COLS = "96px 96px 1fr 152px 90px 140px 72px 96px 40px";
+const COLS = "96px 96px 1fr 152px 90px 140px 72px 110px 96px 40px";
 
 interface ImageStackProps {
   images: string[];
@@ -184,9 +187,29 @@ export default function GenerationPage() {
     }));
   };
 
-  const handleGenerate = (id: string) => {
-    updateRow(id, { status: "loading" });
-    setTimeout(() => updateRow(id, { status: "done" }), 2000);
+  const handleGenerate = async (id: string) => {
+    const row = rowsBySection[activeSection].find((r) => r.id === id);
+    if (!row || row.status === "loading") return;
+    updateRow(id, { status: "loading", outputImages: [], errorMsg: undefined });
+    try {
+      const res = await fetch("/api/image-generate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          prompt: row.prompt,
+          resolution: row.resolution,
+          quality: row.quality,
+          count: row.count,
+          imageInput: row.imageInput,
+          imageReproduction: row.imageReproduction,
+        }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Erreur API");
+      updateRow(id, { status: "done", outputImages: data.images ?? [] });
+    } catch (err) {
+      updateRow(id, { status: "error", errorMsg: err instanceof Error ? err.message : "Erreur" });
+    }
   };
 
   return (
@@ -249,9 +272,9 @@ export default function GenerationPage() {
             display: "grid", gridTemplateColumns: COLS,
             background: "#150d2a", borderBottom: "1px solid rgba(255,215,0,0.15)",
           }}>
-            {["Image Input", "Goal", "Prompt de génération", "Résolution", "Qualité", "Modèle", "Nbr", "Output", ""].map((col, i) => (
+            {["Image Input", "Goal", "Prompt de génération", "Résolution", "Qualité", "Modèle", "Nbr", "Start", "Output", ""].map((col, i) => (
               <div key={i} className="px-3 py-3 text-[10px] font-black tracking-widest uppercase"
-                style={{ color: "rgba(255,215,0,0.5)", borderRight: i < 8 ? "1px solid rgba(255,215,0,0.08)" : "none" }}>
+                style={{ color: i === 7 ? "#ffd700" : "rgba(255,215,0,0.5)", borderRight: i < 9 ? "1px solid rgba(255,215,0,0.08)" : "none" }}>
                 {col}
               </div>
             ))}
@@ -338,6 +361,27 @@ export default function GenerationPage() {
                 </select>
               </div>
 
+              {/* Start */}
+              <div style={{ ...cellStyle, padding: "8px" }} className="flex items-start justify-center pt-2">
+                <button
+                  onClick={() => handleGenerate(row.id)}
+                  disabled={row.status === "loading"}
+                  className="flex items-center gap-1.5 px-3 py-2 rounded-xl font-black text-xs transition-all disabled:opacity-40 disabled:cursor-not-allowed"
+                  style={row.status === "loading" ? {
+                    background: "rgba(255,215,0,0.05)",
+                    border: "1px solid rgba(255,215,0,0.2)",
+                    color: "rgba(255,215,0,0.4)",
+                  } : {
+                    background: "linear-gradient(135deg, #ffd700, #ff8c00)",
+                    color: "#07050e",
+                    boxShadow: "0 0 14px rgba(255,215,0,0.25)",
+                  }}>
+                  {row.status === "loading"
+                    ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> En cours</>
+                    : <><Play className="w-3.5 h-3.5" fill="currentColor" /> Start</>}
+                </button>
+              </div>
+
               {/* Output */}
               <div style={{ ...cellStyle, padding: "8px 4px" }}>
                 <div className="flex flex-col gap-1 items-center">
@@ -347,12 +391,22 @@ export default function GenerationPage() {
                       <Loader2 className="w-4 h-4 animate-spin" style={{ color: "#ffd700" }} />
                     </div>
                   )}
-                  {row.status === "done" && Array.from({ length: row.count }).map((_, i) => (
-                    <div key={i} className="w-14 h-14 rounded-lg flex items-center justify-center text-xs font-black text-white"
-                      style={{ background: "linear-gradient(135deg, #7c00ff, #ff2d78)", flexShrink: 0 }}>
-                      ✓
+                  {row.status === "error" && (
+                    <div className="w-14 h-14 rounded-lg flex items-center justify-center text-xs text-center px-1"
+                      style={{ background: "rgba(255,45,120,0.08)", border: "1px solid rgba(255,45,120,0.2)", color: "#ff2d78" }}>
+                      ✕
                     </div>
+                  )}
+                  {row.status === "done" && row.outputImages.map((url, i) => (
+                    <a key={i} href={url} target="_blank" rel="noreferrer"
+                      className="w-14 h-14 rounded-lg overflow-hidden flex-shrink-0 block">
+                      <img src={url} alt="" className="w-full h-full object-cover" />
+                    </a>
                   ))}
+                  {row.status === "done" && row.outputImages.length === 0 && (
+                    <div className="w-14 h-14 rounded-lg flex items-center justify-center text-xs font-black"
+                      style={{ background: "rgba(255,215,0,0.06)", color: "rgba(255,215,0,0.4)" }}>?</div>
+                  )}
                   {row.status === "idle" && (
                     <div className="w-14 h-14 rounded-lg flex items-center justify-center"
                       style={{ background: "#140e28", border: "1px solid rgba(255,215,0,0.08)" }}>
@@ -362,18 +416,13 @@ export default function GenerationPage() {
                 </div>
               </div>
 
-              {/* Actions */}
-              <div style={{ ...cellStyle, borderRight: "none" }} className="flex flex-col items-center justify-start gap-1.5 pt-2">
-                <button onClick={() => handleGenerate(row.id)} disabled={row.status === "loading"}
-                  className="p-1.5 rounded-lg transition-all disabled:opacity-40"
-                  style={{ background: "rgba(255,215,0,0.1)", color: "#ffd700" }} title="Générer">
-                  <Zap className="w-3.5 h-3.5" />
-                </button>
+              {/* Delete */}
+              <div style={{ ...cellStyle, borderRight: "none" }} className="flex items-start justify-center pt-2">
                 {rows.length > 1 && (
                   <button onClick={() => deleteRow(row.id)}
-                    className="p-1.5 rounded-lg hover:text-red-400 transition-colors"
-                    style={{ color: "rgba(255,45,120,0.4)" }} title="Supprimer">
-                    <Trash2 className="w-3 h-3" />
+                    className="p-1.5 rounded-lg transition-colors"
+                    style={{ color: "rgba(255,45,120,0.35)" }} title="Supprimer">
+                    <Trash2 className="w-3.5 h-3.5" />
                   </button>
                 )}
               </div>
