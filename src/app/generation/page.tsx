@@ -432,9 +432,9 @@ export default function GenerationPage() {
                     </div>
                   )}
                   {row.status === "error" && (
-                    <div className="w-14 h-14 rounded-lg flex items-center justify-center text-xs text-center px-1"
-                      style={{ background: "rgba(255,45,120,0.08)", border: "1px solid rgba(255,45,120,0.2)", color: "#ff2d78" }}>
-                      ✕
+                    <div className="rounded-lg p-2 text-center"
+                      style={{ background: "rgba(255,45,120,0.08)", border: "1px solid rgba(255,45,120,0.2)", color: "#ff2d78", fontSize: "10px", lineHeight: "1.4", maxWidth: "88px" }}>
+                      ✕ {row.errorMsg ?? "Erreur"}
                     </div>
                   )}
                   {row.status === "done" && row.outputImages.map((url, i) => (

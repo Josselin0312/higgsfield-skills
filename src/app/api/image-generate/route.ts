@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { HiggsfieldClient } from "@higgsfield/client";
-import { createHiggsfieldClient } from "@higgsfield/client/v2";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -14,15 +13,26 @@ const ASPECT_RATIO: Record<string, string> = {
   "800x1200": "2:3",
 };
 
-async function uploadBase64(base64: string): Promise<string> {
-  const v1 = new HiggsfieldClient({
+// Candidate endpoints to try in order
+const ENDPOINTS = [
+  "nano-banana-pro/text-to-image",
+  "/v1/text2image/nano-banana-pro",
+  "nano-banana/text-to-image",
+  "/v1/text2image/nano-banana",
+];
+
+function makeClient() {
+  return new HiggsfieldClient({
     apiKey: process.env.HIGGSFIELD_KEY_ID!,
     apiSecret: process.env.HIGGSFIELD_KEY_SECRET!,
   });
+}
+
+async function uploadBase64(client: HiggsfieldClient, base64: string): Promise<string> {
   const [header, data] = base64.split(",");
   const format = header.includes("png") ? "png" : header.includes("webp") ? "webp" : "jpeg";
   const buffer = Buffer.from(data, "base64");
-  return v1.uploadImage(buffer, format as "jpeg" | "png" | "webp");
+  return client.uploadImage(buffer, format as "jpeg" | "png" | "webp");
 }
 
 export async function POST(req: NextRequest) {
@@ -33,19 +43,14 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
     }
 
-    const client = createHiggsfieldClient({
-      credentials: `${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`,
-      maxPollTime: 240000,
-      pollInterval: 3000,
-    });
-
+    const client = makeClient();
     const aspect_ratio = ASPECT_RATIO[resolution] ?? "1:1";
 
-    // Upload all base64 reference images to get hosted URLs
+    // Upload reference images to get hosted URLs
     const allBase64Refs = [...imageInput, ...imageReproduction].filter(Boolean);
     const uploadedUrls = await Promise.all(
       allBase64Refs.map((img: string) =>
-        img.startsWith("data:") ? uploadBase64(img) : Promise.resolve(img)
+        img.startsWith("data:") ? uploadBase64(client, img) : Promise.resolve(img)
       )
     );
 
@@ -54,38 +59,55 @@ export async function POST(req: NextRequest) {
       image_url: url,
     }));
 
-    // Run `count` generations in parallel (capped at 8 for performance)
-    const actualCount = Math.min(count, 8);
-    const results = await Promise.allSettled(
-      Array.from({ length: actualCount }, async () => {
+    // Try each endpoint until one works
+    let lastError = "";
+    for (const endpoint of ENDPOINTS) {
+      try {
         const body: Record<string, unknown> = { prompt, aspect_ratio };
         if (input_images.length > 0) body.input_images = input_images;
 
-        const response = await client.subscribe("nano-banana-pro/text-to-image", {
-          input: body,
-          withPolling: true,
-        });
+        const jobSet = await client.generate(endpoint, body, { withPolling: true });
 
-        if (response.status === "completed") {
-          return response.images?.[0]?.url ?? null;
+        // Success — collect images from all jobs
+        const images: string[] = [];
+        const actualCount = Math.min(count, 8);
+
+        // First result already obtained, generate remaining in parallel if count > 1
+        const allJobSets = [jobSet];
+        if (actualCount > 1) {
+          const rest = await Promise.allSettled(
+            Array.from({ length: actualCount - 1 }, () =>
+              client.generate(endpoint, body, { withPolling: true })
+            )
+          );
+          rest.forEach((r) => {
+            if (r.status === "fulfilled") allJobSets.push(r.value);
+          });
         }
-        return null;
-      })
+
+        for (const js of allJobSets) {
+          for (const job of js.jobs) {
+            const url = job.results?.raw?.url ?? job.results?.url ?? null;
+            if (url) images.push(url);
+          }
+        }
+
+        return NextResponse.json({ images, endpoint });
+      } catch (err) {
+        lastError = err instanceof Error ? err.message : String(err);
+        console.error(`[image-generate] endpoint "${endpoint}" failed:`, lastError);
+        // Continue to next endpoint
+      }
+    }
+
+    // All endpoints failed
+    return NextResponse.json(
+      { error: `Tous les endpoints ont échoué. Dernière erreur: ${lastError}` },
+      { status: 500 }
     );
-
-    const images = results
-      .filter((r): r is PromiseFulfilledResult<string | null> => r.status === "fulfilled")
-      .map((r) => r.value)
-      .filter((u): u is string => !!u);
-
-    const errors = results
-      .filter((r): r is PromiseRejectedResult => r.status === "rejected")
-      .map((r) => String(r.reason));
-
-    return NextResponse.json({ images, errors: errors.length ? errors : undefined });
   } catch (err: unknown) {
     const msg = err instanceof Error ? err.message : String(err);
-    console.error("[image-generate]", msg);
+    console.error("[image-generate] outer error:", msg);
     return NextResponse.json({ error: msg }, { status: 500 });
   }
 }
