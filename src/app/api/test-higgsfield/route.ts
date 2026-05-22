@@ -84,11 +84,15 @@ export async function GET() {
   // --- V2 SDK tests (sends body directly, Authorization: Key header) ---
   const v2Client = makeV2Client();
   const v2Tests = [
-    // Try different endpoint patterns for nano_banana_2
+    // nano_banana_pro (what the user actually uses)
+    { label: "V2 /nano_banana_pro no images", endpoint: "/nano_banana_pro", input: { prompt: "test", aspect_ratio: "1:1" } },
+    { label: "V2 /nano_banana_pro medias real", endpoint: "/nano_banana_pro", input: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] } },
+    { label: "V2 /nano-banana-pro no images", endpoint: "/nano-banana-pro", input: { prompt: "test", aspect_ratio: "1:1" } },
+    { label: "V2 /v1/text2image/nano-banana-pro no images", endpoint: "/v1/text2image/nano-banana-pro", input: { prompt: "test", aspect_ratio: "1:1" } },
+    { label: "V2 /v1/text2image/nano-banana-pro medias real", endpoint: "/v1/text2image/nano-banana-pro", input: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] } },
+    // nano_banana_2 fallback
     { label: "V2 /nano_banana_2 no images", endpoint: "/nano_banana_2", input: { prompt: "test", aspect_ratio: "1:1" } },
-    { label: "V2 /nano_banana_2 image_url real", endpoint: "/nano_banana_2", input: { prompt: "test", aspect_ratio: "1:1", input_images: [{ type: "image_url", image_url: REAL_HF_IMG }] } },
     { label: "V2 /nano_banana_2 medias real", endpoint: "/nano_banana_2", input: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] } },
-    { label: "V2 /nano-banana-2 no images", endpoint: "/nano-banana-2", input: { prompt: "test", aspect_ratio: "1:1" } },
     { label: "V2 /v1/text2image/nano-banana-2 no images", endpoint: "/v1/text2image/nano-banana-2", input: { prompt: "test", aspect_ratio: "1:1" } },
     { label: "V2 /v1/text2image/nano-banana-2 medias real", endpoint: "/v1/text2image/nano-banana-2", input: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] } },
   ];
@@ -105,10 +109,13 @@ export async function GET() {
 
   // --- Raw https tests (direct control over body format) ---
   const rawTests = [
-    // V2 auth, raw body, nano_banana_2 endpoints
+    // V2 auth — nano_banana_pro
+    { label: "RAW V2 /nano_banana_pro medias", path: "/nano_banana_pro", body: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] }, v2: true },
+    { label: "RAW V2 /v1/text2image/nano-banana-pro medias", path: "/v1/text2image/nano-banana-pro", body: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] }, v2: true },
+    // V2 auth — nano_banana_2
     { label: "RAW V2 /nano_banana_2 medias", path: "/nano_banana_2", body: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] }, v2: true },
     { label: "RAW V2 /v1/text2image/nano-banana-2 medias", path: "/v1/text2image/nano-banana-2", body: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] }, v2: true },
-    // V1 auth, params wrapped, real image
+    // V1 auth — nano-banana with real HF CDN image
     { label: "RAW V1 /v1/text2image/nano-banana image_url real", path: "/v1/text2image/nano-banana", body: { params: { prompt: "test", aspect_ratio: "1:1", input_images: [{ type: "image_url", image_url: REAL_HF_IMG }] } }, v2: false },
   ];
 
