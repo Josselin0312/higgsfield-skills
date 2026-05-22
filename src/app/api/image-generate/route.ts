@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { HiggsfieldClient } from "@higgsfield/client";
+import { createHiggsfieldClient } from "@higgsfield/client";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -20,13 +20,18 @@ const RESOLUTION_MAP: Record<string, string> = {
 };
 
 function makeClient() {
-  return new HiggsfieldClient({
+  return createHiggsfieldClient({
     apiKey: process.env.HIGGSFIELD_KEY_ID ?? "",
     apiSecret: process.env.HIGGSFIELD_KEY_SECRET ?? "",
     timeout: 120000,
     maxPollTime: 240000,
     pollInterval: 4000,
   });
+}
+
+// Extract UUID from CDN URL filename: .../user_XXX/UUID.ext
+function extractId(url: string): string {
+  return url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? crypto.randomUUID();
 }
 
 export async function POST(req: NextRequest) {
@@ -40,23 +45,31 @@ export async function POST(req: NextRequest) {
     const actualCount = Math.min(Math.max(1, count), 8);
     const client = makeClient();
 
-    const params: Record<string, unknown> = {
-      prompt,
-      aspect_ratio,
-      resolution: res_param,
-    };
+    // Build input — nano_banana_pro uses medias array (V2 API format)
+    const input: Record<string, unknown> = { prompt, aspect_ratio, resolution: res_param };
 
     if (inputImages.length > 0) {
-      params.input_images = inputImages; // format: [{type:"image_url", image_url: CDN_URL}]
-      console.log("[image-generate] using", inputImages.length, "pre-uploaded image(s):", JSON.stringify(inputImages[0]));
+      // inputImages from frontend: [{id, type:"media_input", url}]
+      // nano_banana_pro expects: medias:[{role:"image", data:{id,type,url}}]
+      input.medias = inputImages.map((img: { id?: string; url: string; type?: string }) => ({
+        role: "image",
+        data: {
+          id: img.id ?? extractId(img.url),
+          type: "media_input",
+          url: img.url,
+        },
+      }));
+      console.log("[image-generate] nano_banana_pro with", inputImages.length, "image(s)");
+    } else {
+      console.log("[image-generate] nano_banana_pro text-only");
     }
 
-    console.log("[image-generate] generating, aspect:", aspect_ratio, "refs:", inputImages.length);
-
     const generateOne = async (): Promise<string | null> => {
-      const jobSet = await client.generate("/v1/text2image/nano-banana", params, { withPolling: true });
-      const job = jobSet.jobs?.[0];
-      return job?.results?.raw?.url ?? null;
+      const result = await client.subscribe("/nano_banana_pro", { input, withPolling: true });
+      // V2 response: {status, results:{rawUrl, minUrl}} or {rawUrl} depending on polling
+      const r = result as Record<string, unknown>;
+      const results = r.results as Record<string, string> | undefined;
+      return results?.rawUrl ?? (r.rawUrl as string) ?? null;
     };
 
     const firstUrl = await generateOne();
@@ -67,6 +80,10 @@ export async function POST(req: NextRequest) {
         Array.from({ length: actualCount - 1 }, generateOne)
       );
       rest.forEach((r) => { if (r.status === "fulfilled" && r.value) images.push(r.value); });
+    }
+
+    if (images.length === 0) {
+      return NextResponse.json({ error: "Aucune image générée" }, { status: 500 });
     }
 
     return NextResponse.json({ images });
