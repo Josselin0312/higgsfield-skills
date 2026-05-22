@@ -26,13 +26,14 @@ async function getFreshJWT(): Promise<string> {
 
 async function fnf(jwt: string, path: string, body?: unknown) {
   const res = await fetch(`https://fnf.higgsfield.ai${path}`, {
-    method: body ? "POST" : "GET",
+    method: body !== undefined ? "POST" : "GET",
     headers: {
       "Authorization": `Bearer ${jwt}`,
       "Content-Type": "application/json",
       "Origin": "https://higgsfield.ai",
+      "Referer": "https://higgsfield.ai/",
     },
-    ...(body ? { body: JSON.stringify(body) } : {}),
+    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
   });
   let data: unknown;
   try { data = await res.json(); } catch { data = await res.text(); }
@@ -41,16 +42,22 @@ async function fnf(jwt: string, path: string, body?: unknown) {
 
 export async function GET() {
   const jwt = await getFreshJWT();
+  const prompt = "a woman walking in Paris";
+  const body = { model: "nano_banana_pro", prompt, aspect_ratio: "1:1" };
 
-  const [workspace, generations, generate] = await Promise.all([
-    fnf(jwt, "/workspaces/details"),
-    fnf(jwt, "/generations?limit=5"),
-    fnf(jwt, "/generations", {
-      model: "nano_banana_pro",
-      prompt: "a woman walking in Paris",
-      aspect_ratio: "1:1",
-    }),
+  const [a, b, c, d, e] = await Promise.all([
+    fnf(jwt, "/generate"),
+    fnf(jwt, "/v1/generate"),
+    fnf(jwt, "/generate/image", body),
+    fnf(jwt, "/v1/images/generate", body),
+    fnf(jwt, "/v2/generate/image", body),
   ]);
 
-  return NextResponse.json({ jwtOk: true, workspace, generations, generate });
+  return NextResponse.json({
+    "/generate GET": a,
+    "/v1/generate GET": b,
+    "/generate/image POST": c,
+    "/v1/images/generate POST": d,
+    "/v2/generate/image POST": e,
+  });
 }
