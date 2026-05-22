@@ -168,7 +168,7 @@ export async function POST(req: NextRequest) {
     if ((inputImages as unknown[]).length > 0) {
       params.medias = (inputImages as { id: string; url: string }[]).map(img => ({
         role: "image",
-        value: img.id, // UUID Higgsfield (media_id confirmé)
+        value: img.url, // URL CDN publique Higgsfield
       }));
     }
 

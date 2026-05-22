@@ -265,7 +265,7 @@ export default function GenerationPage() {
       body: JSON.stringify({ media_id }),
     });
 
-    return { id: media_id, url: media_id };
+    return { id: media_id, url: public_url };
   };
 
   const handleGenerate = async (id: string) => {
