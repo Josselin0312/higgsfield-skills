@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHiggsfieldClient } from "@higgsfield/client/v2";
+import https from "https";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;
@@ -19,18 +19,95 @@ const RESOLUTION_MAP: Record<string, string> = {
   "4K": "4k",
 };
 
-function makeClient() {
-  return createHiggsfieldClient({
-    apiKey: process.env.HIGGSFIELD_KEY_ID ?? "",
-    apiSecret: process.env.HIGGSFIELD_KEY_SECRET ?? "",
-    timeout: 120000,
-    maxPollTime: 240000,
-    pollInterval: 4000,
+const KEY_ID  = process.env.HIGGSFIELD_KEY_ID ?? "";
+const KEY_SECRET = process.env.HIGGSFIELD_KEY_SECRET ?? "";
+
+// Call mcp.higgsfield.ai via MCP JSON-RPC over SSE
+function mcpCall(body: unknown): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    const payload = JSON.stringify(body);
+    const req = https.request({
+      hostname: "mcp.higgsfield.ai",
+      path: "/mcp",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(payload),
+        "Accept": "application/json, text/event-stream",
+        "Authorization": `Bearer ${KEY_SECRET}`,
+      },
+      timeout: 270000,
+    }, (res) => {
+      const ct = res.headers["content-type"] ?? "";
+      let raw = "";
+      res.on("data", (c) => (raw += c));
+      res.on("end", () => {
+        if (ct.includes("text/event-stream")) {
+          // Parse SSE: find data: {...} lines
+          const lines = raw.split("\n");
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const json = line.slice(6).trim();
+              if (json && json !== "[DONE]") {
+                try { return resolve(JSON.parse(json)); } catch { /* skip */ }
+              }
+            }
+          }
+          reject(new Error("No data in SSE response: " + raw.slice(0, 200)));
+        } else {
+          try { resolve(JSON.parse(raw)); }
+          catch { reject(new Error("Parse error: " + raw.slice(0, 200))); }
+        }
+      });
+    });
+    req.on("error", reject);
+    req.on("timeout", () => { req.destroy(); reject(new Error("MCP timeout")); });
+    req.write(payload);
+    req.end();
   });
 }
 
-function extractId(url: string): string {
-  return url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? "";
+async function generateImage(params: Record<string, unknown>): Promise<string | null> {
+  // 1. Initialize MCP session
+  await mcpCall({ jsonrpc: "2.0", method: "initialize", id: 1, params: {
+    protocolVersion: "2024-11-05",
+    capabilities: {},
+    clientInfo: { name: "slidein", version: "1.0" }
+  }});
+
+  // 2. Call generate_image tool
+  const result = await mcpCall({
+    jsonrpc: "2.0",
+    method: "tools/call",
+    id: 2,
+    params: {
+      name: "generate_image",
+      arguments: { params }
+    }
+  }) as Record<string, unknown>;
+
+  // 3. Extract image URL from result
+  const content = (result?.result as Record<string, unknown>)?.content;
+  const text = Array.isArray(content)
+    ? content.find((c: Record<string, unknown>) => c.type === "text")?.text
+    : typeof content === "string" ? content : null;
+
+  if (!text) return null;
+
+  // Parse result to find URL
+  try {
+    const parsed = JSON.parse(text as string);
+    const items = parsed?.results ?? parsed?.images ?? [parsed];
+    for (const item of items) {
+      const url = item?.rawUrl ?? item?.url ?? item?.results?.rawUrl;
+      if (url) return url as string;
+    }
+  } catch {
+    // Try regex fallback
+    const match = (text as string).match(/https?:\/\/[^\s"']+\.(?:png|jpg|webp)/i);
+    if (match) return match[0];
+  }
+  return null;
 }
 
 export async function POST(req: NextRequest) {
@@ -41,34 +118,27 @@ export async function POST(req: NextRequest) {
 
     const aspect_ratio = ASPECT_RATIO[resolution] ?? "1:1";
     const res_param = RESOLUTION_MAP[quality] ?? "1k";
-    const actualCount = Math.min(Math.max(1, count), 8);
-    const client = makeClient();
+    const actualCount = Math.min(Math.max(1, count), 4);
 
-    // nano_banana_2 is the actual model behind "NanoBananaPRO"
-    // V2 API format (from real generation history): input_images:[{id,type:"media_input",url}]
-    const input: Record<string, unknown> = {
+    const params: Record<string, unknown> = {
+      model: "nano_banana_2",
       prompt,
       aspect_ratio,
       resolution: res_param,
-      batch_size: 1,
     };
 
     if (inputImages.length > 0) {
-      input.input_images = inputImages.map((img: { id?: string; url: string }) => ({
-        id: img.id ?? extractId(img.url),
-        type: "media_input",
-        url: img.url,
+      params.medias = inputImages.map((img: { id?: string; url: string }) => ({
+        role: "image",
+        value: img.url,
       }));
-      console.log("[image-generate] with", inputImages.length, "image(s):", JSON.stringify(input.input_images[0]));
+      console.log("[image-generate] MCP with", inputImages.length, "image(s)");
     }
 
-    console.log("[image-generate] endpoint: v1/text2image/nano-banana-2");
+    console.log("[image-generate] calling mcp.higgsfield.ai generate_image");
 
     const generateOne = async (): Promise<string | null> => {
-      const result = await client.subscribe("v1/text2image/nano-banana-2", { input, withPolling: true });
-      const r = result as Record<string, unknown>;
-      const results = r.results as Record<string, string> | undefined;
-      return results?.rawUrl ?? (r.rawUrl as string) ?? null;
+      return generateImage(params);
     };
 
     const firstUrl = await generateOne();
