@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { createHiggsfieldClient } from "@higgsfield/client";
+import { createHiggsfieldClient } from "@higgsfield/client/v2";
 
 export const runtime = "nodejs";
 export const maxDuration = 300;

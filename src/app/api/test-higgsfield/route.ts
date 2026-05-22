@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
-import { HiggsfieldClient, createHiggsfieldClient } from "@higgsfield/client";
+import { HiggsfieldClient } from "@higgsfield/client";
+import { createHiggsfieldClient } from "@higgsfield/client/v2";
 import https from "https";
 
 export const runtime = "nodejs";
