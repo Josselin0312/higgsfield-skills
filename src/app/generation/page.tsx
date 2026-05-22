@@ -293,7 +293,9 @@ export default function GenerationPage() {
       if (!res.ok) throw new Error(data.error ?? "Erreur API");
       updateRow(id, { status: "done", outputImages: data.images ?? [] });
     } catch (err) {
-      updateRow(id, { status: "error", errorMsg: err instanceof Error ? err.message : "Erreur" });
+      const msg = err instanceof Error ? err.message : String(err);
+      fetch("/api/log", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ msg, rowId: id, prompt: rowsBySection[activeSection].find(r => r.id === id)?.prompt?.slice(0, 50) }) });
+      updateRow(id, { status: "error", errorMsg: msg });
     }
   };
 
