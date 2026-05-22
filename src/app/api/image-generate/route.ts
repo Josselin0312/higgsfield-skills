@@ -19,9 +19,30 @@ const RESOLUTION_MAP: Record<string, string> = {
   "4K": "4k",
 };
 
-const HIGGSFIELD_TOKEN = process.env.HIGGSFIELD_TOKEN ?? "";
+const CLERK_CLIENT  = process.env.HIGGSFIELD_CLERK_CLIENT ?? "";
+const SESSION_ID    = process.env.HIGGSFIELD_SESSION_ID ?? "";
 
-function mcpCall(body: unknown): Promise<unknown> {
+// Refresh the Clerk JWT before each call (~60s lifetime)
+async function getFreshJWT(): Promise<string> {
+  const res = await fetch(
+    `https://clerk.higgsfield.ai/v1/client/sessions/${SESSION_ID}/tokens`,
+    {
+      method: "POST",
+      headers: {
+        "Cookie": `__client=${CLERK_CLIENT}`,
+        "Origin": "https://higgsfield.ai",
+        "Referer": "https://higgsfield.ai/",
+        "Content-Type": "application/x-www-form-urlencoded",
+      },
+    }
+  );
+  if (!res.ok) throw new Error(`JWT refresh failed: ${res.status}`);
+  const data = await res.json() as { jwt?: string };
+  if (!data.jwt) throw new Error(`No JWT in Clerk response: ${JSON.stringify(data)}`);
+  return data.jwt;
+}
+
+function mcpCall(body: unknown, jwt: string): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
     const req = https.request({
@@ -32,7 +53,7 @@ function mcpCall(body: unknown): Promise<unknown> {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(payload),
         "Accept": "application/json, text/event-stream",
-        "Authorization": `Bearer ${HIGGSFIELD_TOKEN}`,
+        "Authorization": `Bearer ${jwt}`,
       },
       timeout: 270000,
     }, (res) => {
@@ -41,7 +62,6 @@ function mcpCall(body: unknown): Promise<unknown> {
       res.on("data", (c) => (raw += c));
       res.on("end", () => {
         if (ct.includes("text/event-stream")) {
-          // Server may stream multiple events; take the last valid JSON
           const lines = raw.split("\n");
           let lastValid: unknown = null;
           for (const line of lines) {
@@ -96,16 +116,15 @@ function extractContentText(result: unknown): string | null {
   return null;
 }
 
-async function pollJob(jobId: string): Promise<string | null> {
-  const maxAttempts = 15;
-  const intervalMs = 4000;
-  for (let i = 0; i < maxAttempts; i++) {
-    if (i > 0) await new Promise(r => setTimeout(r, intervalMs));
+async function pollJob(jobId: string, jwt: string): Promise<string | null> {
+  for (let i = 0; i < 15; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, 4000));
     try {
+      const freshJwt = await getFreshJWT();
       const result = await mcpCall({
         jsonrpc: "2.0", method: "tools/call", id: 100 + i,
         params: { name: "show_generations", arguments: { size: 20 } }
-      });
+      }, freshJwt);
       const text = extractContentText(result);
       if (text) {
         const parsed = JSON.parse(text);
@@ -119,23 +138,23 @@ async function pollJob(jobId: string): Promise<string | null> {
         }
       }
     } catch (e) {
-      console.error("[image-generate] poll attempt", i, "failed:", e);
+      console.error("[image-generate] poll", i, e);
     }
   }
   return null;
 }
 
 async function generateImage(params: Record<string, unknown>): Promise<string | null> {
+  const jwt = await getFreshJWT();
+
   await mcpCall({ jsonrpc: "2.0", method: "initialize", id: 1, params: {
-    protocolVersion: "2024-11-05",
-    capabilities: {},
-    clientInfo: { name: "slidein", version: "1.0" }
-  }});
+    protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "slidein", version: "1.0" }
+  }}, jwt);
 
   const result = await mcpCall({
     jsonrpc: "2.0", method: "tools/call", id: 2,
     params: { name: "generate_image", arguments: { params } }
-  }) as Record<string, unknown>;
+  }, jwt) as Record<string, unknown>;
 
   const rpcResult = result?.result as Record<string, unknown> | undefined;
 
@@ -152,7 +171,7 @@ async function generateImage(params: Record<string, unknown>): Promise<string | 
 
   const text = extractContentText(result);
   if (!text) {
-    console.error("[image-generate] no text content, raw result:", JSON.stringify(result).slice(0, 500));
+    console.error("[image-generate] no text content:", JSON.stringify(result).slice(0, 500));
     return null;
   }
 
@@ -164,8 +183,8 @@ async function generateImage(params: Record<string, unknown>): Promise<string | 
     const jobId = (parsed?.results as Record<string, unknown>[])?.[0]?.id ?? parsed?.id;
     const status = (parsed?.results as Record<string, unknown>[])?.[0]?.status ?? parsed?.status;
     if (jobId && status === "pending") {
-      console.log("[image-generate] job pending, polling:", jobId);
-      return await pollJob(jobId as string);
+      console.log("[image-generate] pending, polling:", jobId);
+      return await pollJob(jobId as string, jwt);
     }
   } catch {
     const match = text.match(/https?:\/\/[^\s"']+\.(?:png|jpg|webp)/i);
@@ -199,10 +218,9 @@ export async function POST(req: NextRequest) {
       console.log("[image-generate] with", inputImages.length, "reference image(s)");
     }
 
-    console.log("[image-generate] calling MCP generate_image, model: nano_banana_pro");
+    console.log("[image-generate] calling MCP nano_banana_pro");
 
     const generateOne = () => generateImage(params);
-
     const firstUrl = await generateOne();
     const images: string[] = firstUrl ? [firstUrl] : [];
 

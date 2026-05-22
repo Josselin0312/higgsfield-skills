@@ -4,67 +4,91 @@ import https from "https";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const KEY_ID     = process.env.HIGGSFIELD_KEY_ID ?? "";
-const KEY_SECRET = process.env.HIGGSFIELD_KEY_SECRET ?? "";
-const TOKEN      = process.env.HIGGSFIELD_TOKEN ?? "";
+const CLERK_CLIENT = process.env.HIGGSFIELD_CLERK_CLIENT ?? "";
+const SESSION_ID   = process.env.HIGGSFIELD_SESSION_ID ?? "";
 
-function req(hostname: string, path: string, method: string, body: unknown, auth: string): Promise<{ status: number; data: unknown }> {
+async function getFreshJWT(): Promise<{ ok: boolean; jwt?: string; error?: string }> {
+  try {
+    const res = await fetch(
+      `https://clerk.higgsfield.ai/v1/client/sessions/${SESSION_ID}/tokens`,
+      {
+        method: "POST",
+        headers: {
+          "Cookie": `__client=${CLERK_CLIENT}`,
+          "Origin": "https://higgsfield.ai",
+          "Referer": "https://higgsfield.ai/",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+    const data = await res.json() as Record<string, unknown>;
+    if (data.jwt) return { ok: true, jwt: data.jwt as string };
+    return { ok: false, error: `status ${res.status}: ${JSON.stringify(data).slice(0, 200)}` };
+  } catch (e) {
+    return { ok: false, error: String(e) };
+  }
+}
+
+function mcpPost(body: unknown, jwt: string): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve) => {
-    const payload = method === "GET" ? "" : JSON.stringify(body);
-    const headers: Record<string, string | number> = {
-      "Accept": "application/json",
-      "Authorization": auth,
-    };
-    if (method !== "GET") {
-      headers["Content-Type"] = "application/json";
-      headers["Content-Length"] = Buffer.byteLength(payload);
-    }
-    const r = https.request({ hostname, path, method, headers, timeout: 20000 }, (res) => {
+    const payload = JSON.stringify(body);
+    const req = https.request({
+      hostname: "mcp.higgsfield.ai",
+      path: "/mcp",
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Content-Length": Buffer.byteLength(payload),
+        "Accept": "application/json, text/event-stream",
+        "Authorization": `Bearer ${jwt}`,
+      },
+      timeout: 110000,
+    }, (res) => {
+      const ct = res.headers["content-type"] ?? "";
       let raw = "";
       res.on("data", (c) => (raw += c));
       res.on("end", () => {
-        try { resolve({ status: res.statusCode ?? 0, data: JSON.parse(raw) }); }
-        catch { resolve({ status: res.statusCode ?? 0, data: raw.slice(0, 200) }); }
+        if (ct.includes("text/event-stream")) {
+          const lines = raw.split("\n");
+          let lastValid: unknown = null;
+          for (const line of lines) {
+            if (line.startsWith("data: ")) {
+              const json = line.slice(6).trim();
+              if (json && json !== "[DONE]") {
+                try { lastValid = JSON.parse(json); } catch { /* skip */ }
+              }
+            }
+          }
+          resolve({ status: res.statusCode ?? 0, data: lastValid ?? { raw: raw.slice(0, 500) } });
+        } else {
+          try { resolve({ status: res.statusCode ?? 0, data: JSON.parse(raw) }); }
+          catch { resolve({ status: res.statusCode ?? 0, data: raw.slice(0, 300) }); }
+        }
       });
     });
-    r.on("error", (e) => resolve({ status: -1, data: e.message }));
-    r.on("timeout", () => { r.destroy(); resolve({ status: -2, data: "timeout" }); });
-    if (method !== "GET") r.write(payload);
-    r.end();
+    req.on("error", (e) => resolve({ status: -1, data: e.message }));
+    req.on("timeout", () => { req.destroy(); resolve({ status: -2, data: "timeout" }); });
+    req.write(payload);
+    req.end();
   });
 }
 
 export async function GET() {
-  const keyAuth    = `Key ${KEY_ID}:${KEY_SECRET}`;
-  const bearerKey  = `Bearer ${KEY_SECRET}`;
-  const bearerJwt  = `Bearer ${TOKEN}`;
+  const tokenResult = await getFreshJWT();
+  if (!tokenResult.ok || !tokenResult.jwt) {
+    return NextResponse.json({ error: "JWT refresh failed", detail: tokenResult.error });
+  }
 
-  const [
-    // fnf.higgsfield.ai avec différents formats d'auth
-    fnfKeyWorkspace,
-    fnfKeyGenerate,
-    fnfBearerKeyWorkspace,
-    fnfJwtWorkspace,
-    // MCP avec clé secrète
-    mcpBearerKey,
-  ] = await Promise.all([
-    req("fnf.higgsfield.ai", "/workspaces/details", "GET", null, keyAuth),
-    req("fnf.higgsfield.ai", "/generations", "GET", null, keyAuth),
-    req("fnf.higgsfield.ai", "/workspaces/details", "GET", null, bearerKey),
-    req("fnf.higgsfield.ai", "/workspaces/details", "GET", null, bearerJwt),
-    req("mcp.higgsfield.ai", "/mcp", "POST",
-      { jsonrpc: "2.0", method: "initialize", id: 1, params: {
-        protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1.0" }
-      }},
-      bearerKey
-    ),
-  ]);
+  const jwt = tokenResult.jwt;
 
-  return NextResponse.json({
-    "fnf Key ID:SECRET /workspaces/details": fnfKeyWorkspace,
-    "fnf Key ID:SECRET /generations": fnfKeyGenerate,
-    "fnf Bearer SECRET /workspaces/details": fnfBearerKeyWorkspace,
-    "fnf Bearer JWT /workspaces/details": fnfJwtWorkspace,
-    "mcp Bearer SECRET init": mcpBearerKey,
-  });
+  const init = await mcpPost({ jsonrpc: "2.0", method: "initialize", id: 1, params: {
+    protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1.0" }
+  }}, jwt);
+
+  const gen = await mcpPost({ jsonrpc: "2.0", method: "tools/call", id: 2, params: {
+    name: "generate_image",
+    arguments: { params: { model: "nano_banana_pro", prompt: "a woman walking in Paris", aspect_ratio: "1:1" } }
+  }}, jwt);
+
+  return NextResponse.json({ tokenRefresh: "ok", init, gen });
 }
