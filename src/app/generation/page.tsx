@@ -266,10 +266,8 @@ export default function GenerationPage() {
     if (!row || row.status === "loading") return;
     updateRow(id, { status: "loading", outputImages: [], errorMsg: undefined });
     try {
-      const refImages = row.imageInput.length > 0 ? row.imageInput : row.imageReproduction;
-
       const uploaded = await Promise.all(
-        refImages.map((img) => img.startsWith("data:") ? uploadFromBrowser(img) : Promise.resolve({ id: img, url: img }))
+        row.imageInput.map((img) => img.startsWith("data:") ? uploadFromBrowser(img) : Promise.resolve({ id: img, url: img }))
       );
       const inputImages = uploaded.map(({ id, url }) => ({ id, type: "media_input", url }));
 
