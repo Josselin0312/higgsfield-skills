@@ -40,8 +40,7 @@ async function mcpPost(method: string, params: unknown, id: number) {
   return JSON.parse(raw);
 }
 
-export async function POST(req: NextRequest) {
-  const { content_type, filename } = await req.json();
+async function handleUpload(content_type: string, filename?: string) {
   const ext = (content_type ?? "image/jpeg").split("/")[1] ?? "jpg";
   const rpc = await mcpPost("tools/call", {
     name: "media_upload",
@@ -59,4 +58,15 @@ export async function POST(req: NextRequest) {
     media_id: upload.media_id,
     public_url: upload.url,
   });
+}
+
+export async function GET(req: NextRequest) {
+  const content_type = req.nextUrl.searchParams.get("content_type") ?? "image/jpeg";
+  const filename = req.nextUrl.searchParams.get("filename") ?? undefined;
+  return handleUpload(content_type, filename);
+}
+
+export async function POST(req: NextRequest) {
+  const { content_type, filename } = await req.json();
+  return handleUpload(content_type, filename);
 }

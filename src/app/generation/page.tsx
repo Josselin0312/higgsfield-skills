@@ -238,16 +238,12 @@ export default function GenerationPage() {
     const [header, data] = base64.split(",");
     const contentType = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
 
-    // 1. Obtenir l'URL de upload Higgsfield via MCP
-    const urlRes = await fetch("/api/upload-url", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ content_type: contentType }),
-    });
+    // 1. Obtenir l'URL de upload Higgsfield via MCP (GET)
+    const urlRes = await fetch(`/api/upload-url?content_type=${encodeURIComponent(contentType)}`);
     if (!urlRes.ok) throw new Error("Erreur obtention URL upload");
     const { upload_url, media_id, public_url } = await urlRes.json();
 
-    // 2. Uploader les bytes vers S3
+    // 2. Uploader les bytes vers S3 (PUT direct, pas via proxy)
     const binary = atob(data);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
@@ -258,12 +254,8 @@ export default function GenerationPage() {
     });
     if (!putRes.ok) throw new Error(`Upload S3 échoué: ${putRes.status}`);
 
-    // 3. Confirmer le média dans Higgsfield
-    await fetch("/api/media-confirm", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ media_id }),
-    });
+    // 3. Confirmer le média dans Higgsfield (GET)
+    await fetch(`/api/media-confirm?media_id=${encodeURIComponent(media_id)}`);
 
     return { id: media_id, url: public_url };
   };
@@ -279,18 +271,15 @@ export default function GenerationPage() {
       );
       const inputImages = uploaded.map(({ id, url }) => ({ id, type: "media_input", url }));
 
-      // Submit jobs — fast (~3s), returns job IDs
-      const res = await fetch("/api/image-generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt: row.prompt,
-          resolution: row.resolution,
-          quality: row.quality,
-          count: row.count,
-          inputImages,
-        }),
+      // Submit jobs via GET (works through all proxies) — fast (~3s), returns job IDs
+      const body = JSON.stringify({
+        prompt: row.prompt,
+        resolution: row.resolution,
+        quality: row.quality,
+        count: row.count,
+        inputImages,
       });
+      const res = await fetch(`/api/image-generate?body=${encodeURIComponent(body)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erreur soumission");
       const jobIds: string[] = data.jobIds ?? [];

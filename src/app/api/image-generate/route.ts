@@ -92,39 +92,56 @@ async function submitJob(params: Record<string, unknown>): Promise<string> {
   return jobId;
 }
 
+async function handleGenerate(prompt: string, resolution: string, quality: string, count: unknown, inputImages: unknown[]) {
+  if (!prompt?.trim()) return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
+
+  const params: Record<string, unknown> = {
+    model: "nano_banana_pro",
+    prompt,
+    aspect_ratio: ASPECT_RATIO[resolution] ?? "1:1",
+    resolution: quality === "4K" ? "4k" : quality === "2K" ? "2k" : "1k",
+  };
+
+  if (inputImages.length > 0) {
+    params.medias = (inputImages as { url: string }[]).map(img => ({
+      role: "image",
+      value: img.url,
+    }));
+  }
+
+  const actualCount = Math.min(Math.max(1, (count as number) ?? 1), 4);
+  const settled = await Promise.allSettled(
+    Array.from({ length: actualCount }, () => submitJob(params))
+  );
+  const jobIds = settled
+    .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+    .map(r => r.value);
+
+  if (jobIds.length === 0) {
+    const err = settled.find(r => r.status === "rejected") as PromiseRejectedResult | undefined;
+    return NextResponse.json({ error: err?.reason?.message ?? "Submit échoué" }, { status: 500 });
+  }
+
+  return NextResponse.json({ jobIds });
+}
+
+export async function GET(req: NextRequest) {
+  try {
+    const bodyParam = req.nextUrl.searchParams.get("body");
+    if (!bodyParam) return NextResponse.json({ error: "body manquant" }, { status: 400 });
+    const { prompt, resolution, quality, count, inputImages = [] } = JSON.parse(bodyParam);
+    return handleGenerate(prompt, resolution, quality, count, inputImages);
+  } catch (err) {
+    const msg = err instanceof Error ? err.message : String(err);
+    console.error("[image-generate GET]", msg);
+    return NextResponse.json({ error: msg }, { status: 500 });
+  }
+}
+
 export async function POST(req: NextRequest) {
   try {
     const { prompt, resolution, quality, count, inputImages = [] } = await req.json();
-    if (!prompt?.trim()) return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
-
-    const params: Record<string, unknown> = {
-      model: "nano_banana_pro",
-      prompt,
-      aspect_ratio: ASPECT_RATIO[resolution] ?? "1:1",
-      resolution: quality === "4K" ? "4k" : quality === "2K" ? "2k" : "1k",
-    };
-
-    if ((inputImages as unknown[]).length > 0) {
-      params.medias = (inputImages as { url: string }[]).map(img => ({
-        role: "image",
-        value: img.url,
-      }));
-    }
-
-    const actualCount = Math.min(Math.max(1, count ?? 1), 4);
-    const settled = await Promise.allSettled(
-      Array.from({ length: actualCount }, () => submitJob(params))
-    );
-    const jobIds = settled
-      .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
-      .map(r => r.value);
-
-    if (jobIds.length === 0) {
-      const err = settled.find(r => r.status === "rejected") as PromiseRejectedResult | undefined;
-      return NextResponse.json({ error: err?.reason?.message ?? "Submit échoué" }, { status: 500 });
-    }
-
-    return NextResponse.json({ jobIds });
+    return handleGenerate(prompt, resolution, quality, count, inputImages);
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[image-generate]", msg);

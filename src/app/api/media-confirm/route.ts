@@ -13,8 +13,7 @@ const SESSION_ID = "cse_01GXDJAa3epZEUUdAAJuYMCq";
 const SERVER_ID  = "c178aafb-b1b4-4edb-8dce-d398985af22d";
 const TOKEN_FILE = "/home/claude/.claude/remote/.session_ingress_token";
 
-export async function POST(req: NextRequest) {
-  const { media_id } = await req.json();
+async function handleConfirm(media_id: string) {
   const token = (await fs.readFile(TOKEN_FILE, "utf8")).trim();
 
   const res = await fetch(MCP_URL, {
@@ -45,4 +44,15 @@ export async function POST(req: NextRequest) {
   }
 
   return NextResponse.json({ ok: true, rpc });
+}
+
+export async function GET(req: NextRequest) {
+  const media_id = req.nextUrl.searchParams.get("media_id");
+  if (!media_id) return NextResponse.json({ error: "media_id manquant" }, { status: 400 });
+  return handleConfirm(media_id);
+}
+
+export async function POST(req: NextRequest) {
+  const { media_id } = await req.json();
+  return handleConfirm(media_id);
 }
