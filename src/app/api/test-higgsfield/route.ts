@@ -1,43 +1,120 @@
 import { NextResponse } from "next/server";
-import { HiggsfieldClient } from "@higgsfield/client";
+import { HiggsfieldClient, createHiggsfieldClient } from "@higgsfield/client";
+import https from "https";
 
 export const runtime = "nodejs";
 
-function makeClient() {
+// Real Higgsfield CDN URL from actual generation history (always accessible)
+const REAL_HF_IMG = "https://d8j0ntlcm91z4.cloudfront.net/user_3C2oykwvPsJcjrjbFKJ9v1TZm2E/hf_20260521_211012_5bc0ca56-28d9-466c-83ba-8169581e2e4c.png";
+
+function makeV1Client() {
   return new HiggsfieldClient({
     apiKey: process.env.HIGGSFIELD_KEY_ID ?? "",
     apiSecret: process.env.HIGGSFIELD_KEY_SECRET ?? "",
-    timeout: 30000,
-    maxPollTime: 30000,
-    pollInterval: 4000,
+    timeout: 15000,
+    maxPollTime: 10000,
+    pollInterval: 3000,
+    maxRetries: 0,
   });
 }
 
-const PUBLIC_IMG = "https://upload.wikimedia.org/wikipedia/commons/thumb/1/14/Gatto_europeo4.jpg/320px-Gatto_europeo4.jpg";
+function makeV2Client() {
+  return createHiggsfieldClient({
+    apiKey: process.env.HIGGSFIELD_KEY_ID ?? "",
+    apiSecret: process.env.HIGGSFIELD_KEY_SECRET ?? "",
+    timeout: 15000,
+    maxPollTime: 10000,
+    pollInterval: 3000,
+    maxRetries: 0,
+  });
+}
+
+// Raw https request to test endpoint directly (bypasses SDK wrapping)
+function rawPost(path: string, body: unknown, authV2 = false): Promise<{ status: number; data: unknown }> {
+  return new Promise((resolve) => {
+    const payload = JSON.stringify(body);
+    const headers: Record<string, string | number> = {
+      "Content-Type": "application/json",
+      "Content-Length": Buffer.byteLength(payload),
+    };
+    if (authV2) {
+      headers["Authorization"] = `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
+    } else {
+      headers["hf-api-key"] = process.env.HIGGSFIELD_KEY_ID ?? "";
+      headers["hf-secret"] = process.env.HIGGSFIELD_KEY_SECRET ?? "";
+    }
+    const r = https.request({ hostname: "platform.higgsfield.ai", path, method: "POST", headers, timeout: 15000 }, (res) => {
+      let raw = "";
+      res.on("data", (c) => (raw += c));
+      res.on("end", () => {
+        try { resolve({ status: res.statusCode ?? 0, data: JSON.parse(raw) }); }
+        catch { resolve({ status: res.statusCode ?? 0, data: raw }); }
+      });
+    });
+    r.on("error", (e) => resolve({ status: -1, data: e.message }));
+    r.on("timeout", () => { r.destroy(); resolve({ status: -2, data: "timeout" }); });
+    r.write(payload);
+    r.end();
+  });
+}
 
 export async function GET() {
-  const client = makeClient();
   const results: Record<string, unknown>[] = [];
 
-  const tests = [
-    // nano-banana-2 variants (what MCP actually used)
-    { endpoint: "/v1/text2image/nano-banana-2", label: "nb2 no images", params: { prompt: "test", aspect_ratio: "1:1" } },
-    { endpoint: "/v1/text2image/nano-banana-2", label: "nb2 empty images", params: { prompt: "test", aspect_ratio: "1:1", input_images: [] } },
-    { endpoint: "/v1/text2image/nano-banana-2", label: "nb2 public image", params: { prompt: "test", aspect_ratio: "1:1", resolution: "1k", batch_size: 1, input_images: [{ type: "image_url", image_url: PUBLIC_IMG }] } },
-    // image2image endpoint variant
-    { endpoint: "/v1/image2image/nano-banana", label: "img2img nano-banana", params: { prompt: "test", aspect_ratio: "1:1", input_images: [{ type: "image_url", image_url: PUBLIC_IMG }] } },
-    // nano-banana-pro
-    { endpoint: "/v1/text2image/nano-banana-pro", label: "nb-pro", params: { prompt: "test", aspect_ratio: "1:1", input_images: [{ type: "image_url", image_url: PUBLIC_IMG }] } },
+  // --- V1 SDK tests (wraps body in { params: {...} }) ---
+  const v1Client = makeV1Client();
+  const v1Tests = [
+    { label: "V1 nano-banana no images", endpoint: "/v1/text2image/nano-banana", params: { prompt: "test", aspect_ratio: "1:1" } },
+    { label: "V1 nano-banana image_url real", endpoint: "/v1/text2image/nano-banana", params: { prompt: "test", aspect_ratio: "1:1", input_images: [{ type: "image_url", image_url: REAL_HF_IMG }] } },
+    { label: "V1 nano-banana-2 no images", endpoint: "/v1/text2image/nano-banana-2", params: { prompt: "test", aspect_ratio: "1:1" } },
+    { label: "V1 nano-banana-2 image_url real", endpoint: "/v1/text2image/nano-banana-2", params: { prompt: "test", aspect_ratio: "1:1", input_images: [{ type: "image_url", image_url: REAL_HF_IMG }] } },
+    { label: "V1 nano-banana-2 media_input real", endpoint: "/v1/text2image/nano-banana-2", params: { prompt: "test", aspect_ratio: "1:1", input_images: [{ id: "5bc0ca56-28d9-466c-83ba-8169581e2e4c", type: "media_input", url: REAL_HF_IMG }] } },
   ];
 
-  for (const t of tests) {
+  for (const t of v1Tests) {
     try {
-      const jobSet = await client.generate(t.endpoint, t.params, { withPolling: false });
-      results.push({ label: t.label, endpoint: t.endpoint, status: "ok", data: jobSet });
+      const jobSet = await v1Client.generate(t.endpoint, t.params, { withPolling: false });
+      results.push({ label: t.label, status: "ok", data: jobSet });
     } catch (err: unknown) {
       const e = err as { statusCode?: number; message?: string; data?: unknown };
-      results.push({ label: t.label, endpoint: t.endpoint, status: e.statusCode ?? "error", message: e.message });
+      results.push({ label: t.label, status: e.statusCode ?? "error", message: e.message, data: e.data });
     }
+  }
+
+  // --- V2 SDK tests (sends body directly, Authorization: Key header) ---
+  const v2Client = makeV2Client();
+  const v2Tests = [
+    // Try different endpoint patterns for nano_banana_2
+    { label: "V2 /nano_banana_2 no images", endpoint: "/nano_banana_2", input: { prompt: "test", aspect_ratio: "1:1" } },
+    { label: "V2 /nano_banana_2 image_url real", endpoint: "/nano_banana_2", input: { prompt: "test", aspect_ratio: "1:1", input_images: [{ type: "image_url", image_url: REAL_HF_IMG }] } },
+    { label: "V2 /nano_banana_2 medias real", endpoint: "/nano_banana_2", input: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] } },
+    { label: "V2 /nano-banana-2 no images", endpoint: "/nano-banana-2", input: { prompt: "test", aspect_ratio: "1:1" } },
+    { label: "V2 /v1/text2image/nano-banana-2 no images", endpoint: "/v1/text2image/nano-banana-2", input: { prompt: "test", aspect_ratio: "1:1" } },
+    { label: "V2 /v1/text2image/nano-banana-2 medias real", endpoint: "/v1/text2image/nano-banana-2", input: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] } },
+  ];
+
+  for (const t of v2Tests) {
+    try {
+      const result = await v2Client.subscribe(t.endpoint, { input: t.input, withPolling: false });
+      results.push({ label: t.label, status: "ok", data: result });
+    } catch (err: unknown) {
+      const e = err as { statusCode?: number; message?: string; data?: unknown };
+      results.push({ label: t.label, status: e.statusCode ?? "error", message: e.message, data: e.data });
+    }
+  }
+
+  // --- Raw https tests (direct control over body format) ---
+  const rawTests = [
+    // V2 auth, raw body, nano_banana_2 endpoints
+    { label: "RAW V2 /nano_banana_2 medias", path: "/nano_banana_2", body: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] }, v2: true },
+    { label: "RAW V2 /v1/text2image/nano-banana-2 medias", path: "/v1/text2image/nano-banana-2", body: { prompt: "test", aspect_ratio: "1:1", medias: [{ role: "image", value: REAL_HF_IMG }] }, v2: true },
+    // V1 auth, params wrapped, real image
+    { label: "RAW V1 /v1/text2image/nano-banana image_url real", path: "/v1/text2image/nano-banana", body: { params: { prompt: "test", aspect_ratio: "1:1", input_images: [{ type: "image_url", image_url: REAL_HF_IMG }] } }, v2: false },
+  ];
+
+  for (const t of rawTests) {
+    const result = await rawPost(t.path, t.body, t.v2);
+    results.push({ label: t.label, status: result.status, data: result.data });
   }
 
   return NextResponse.json({ results });
