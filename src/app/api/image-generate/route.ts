@@ -29,9 +29,8 @@ function makeClient() {
   });
 }
 
-// Extract UUID from CDN URL filename: .../user_XXX/UUID.ext
 function extractId(url: string): string {
-  return url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? crypto.randomUUID();
+  return url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? "";
 }
 
 export async function POST(req: NextRequest) {
@@ -45,28 +44,28 @@ export async function POST(req: NextRequest) {
     const actualCount = Math.min(Math.max(1, count), 8);
     const client = makeClient();
 
-    // Build input — nano_banana_pro uses medias array (V2 API format)
-    const input: Record<string, unknown> = { prompt, aspect_ratio, resolution: res_param };
+    // nano_banana_2 is the actual model behind "NanoBananaPRO"
+    // V2 API format (from real generation history): input_images:[{id,type:"media_input",url}]
+    const input: Record<string, unknown> = {
+      prompt,
+      aspect_ratio,
+      resolution: res_param,
+      batch_size: 1,
+    };
 
     if (inputImages.length > 0) {
-      // inputImages from frontend: [{id, type:"media_input", url}]
-      // nano_banana_pro expects: medias:[{role:"image", data:{id,type,url}}]
-      input.medias = inputImages.map((img: { id?: string; url: string; type?: string }) => ({
-        role: "image",
-        data: {
-          id: img.id ?? extractId(img.url),
-          type: "media_input",
-          url: img.url,
-        },
+      input.input_images = inputImages.map((img: { id?: string; url: string }) => ({
+        id: img.id ?? extractId(img.url),
+        type: "media_input",
+        url: img.url,
       }));
-      console.log("[image-generate] nano_banana_pro with", inputImages.length, "image(s)");
-    } else {
-      console.log("[image-generate] nano_banana_pro text-only");
+      console.log("[image-generate] with", inputImages.length, "image(s):", JSON.stringify(input.input_images[0]));
     }
 
+    console.log("[image-generate] endpoint: v1/text2image/nano-banana-2");
+
     const generateOne = async (): Promise<string | null> => {
-      const result = await client.subscribe("/nano_banana_pro", { input, withPolling: true });
-      // V2 response: {status, results:{rawUrl, minUrl}} or {rawUrl} depending on polling
+      const result = await client.subscribe("v1/text2image/nano-banana-2", { input, withPolling: true });
       const r = result as Record<string, unknown>;
       const results = r.results as Record<string, string> | undefined;
       return results?.rawUrl ?? (r.rawUrl as string) ?? null;
