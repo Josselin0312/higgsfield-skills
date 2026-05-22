@@ -97,31 +97,39 @@ function getRpcResult(rpc: unknown): Record<string, unknown> | null {
   return result ?? null;
 }
 
-async function pollJob(jobId: string): Promise<string | null> {
-  const token = await getToken();
-  const rpc = await mcpPost(token, "tools/call", {
-    name: "job_status",
-    arguments: { jobId, sync: true },
-  }, Math.floor(Math.random() * 9000) + 100);
+async function pollJob(jobId: string, attempts = 5, delaySec = 6): Promise<string | null> {
+  for (let i = 0; i < attempts; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, delaySec * 1000));
 
-  const result = getRpcResult(rpc);
-  if (!result) return null;
+    const token = await getToken();
+    let rpc: unknown;
+    try {
+      rpc = await mcpPost(token, "tools/call", {
+        name: "job_status",
+        arguments: { jobId, sync: true },
+      }, Math.floor(Math.random() * 9000) + 100);
+    } catch { continue; }
 
-  // Try structuredContent first (most reliable)
-  const sc = result.structuredContent as Record<string, unknown> | undefined;
-  if (sc) {
-    const url = extractUrl(sc);
-    if (url) return url;
-  }
+    let result: Record<string, unknown> | null;
+    try { result = getRpcResult(rpc); } catch { continue; }
+    if (!result) continue;
 
-  // Fallback: grep URL from text content
-  const content = result.content as Array<{ type: string; text?: string; uri?: string }> | undefined;
-  if (Array.isArray(content)) {
-    for (const item of content) {
-      if (item.uri?.startsWith("http")) return item.uri;
-      if (item.text) {
-        const match = item.text.match(/https?:\/\/\S+\.(?:png|jpg|webp|jpeg)/i);
-        if (match) return match[0];
+    // Try structuredContent first (most reliable)
+    const sc = result.structuredContent as Record<string, unknown> | undefined;
+    if (sc) {
+      const url = extractUrl(sc);
+      if (url) return url;
+    }
+
+    // Fallback: grep URL from text content
+    const content = result.content as Array<{ type: string; text?: string; uri?: string }> | undefined;
+    if (Array.isArray(content)) {
+      for (const item of content) {
+        if (item.uri?.startsWith("http")) return item.uri;
+        if (item.text) {
+          const match = item.text.match(/https?:\/\/\S+\.(?:png|jpg|webp|jpeg)/i);
+          if (match) return match[0];
+        }
       }
     }
   }
