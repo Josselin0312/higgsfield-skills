@@ -4,6 +4,7 @@ import https from "https";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
+const KEY_ID     = process.env.HIGGSFIELD_KEY_ID ?? "";
 const KEY_SECRET = process.env.HIGGSFIELD_KEY_SECRET ?? "";
 
 function mcpPost(body: unknown): Promise<{ status: number; data: unknown; raw?: string }> {
@@ -17,7 +18,7 @@ function mcpPost(body: unknown): Promise<{ status: number; data: unknown; raw?: 
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(payload),
         "Accept": "application/json, text/event-stream",
-        "Authorization": `Bearer ${KEY_SECRET}`,
+        "Authorization": `Key ${KEY_ID}:${KEY_SECRET}`,
       },
       timeout: 110000,
     }, (res) => {
