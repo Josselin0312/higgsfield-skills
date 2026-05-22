@@ -19,10 +19,8 @@ const RESOLUTION_MAP: Record<string, string> = {
   "4K": "4k",
 };
 
-const KEY_ID  = process.env.HIGGSFIELD_KEY_ID ?? "";
 const KEY_SECRET = process.env.HIGGSFIELD_KEY_SECRET ?? "";
 
-// Call mcp.higgsfield.ai via MCP JSON-RPC over SSE
 function mcpCall(body: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
     const payload = JSON.stringify(body);
@@ -43,17 +41,19 @@ function mcpCall(body: unknown): Promise<unknown> {
       res.on("data", (c) => (raw += c));
       res.on("end", () => {
         if (ct.includes("text/event-stream")) {
-          // Parse SSE: find data: {...} lines
+          // Server may stream multiple events; take the last valid JSON
           const lines = raw.split("\n");
+          let lastValid: unknown = null;
           for (const line of lines) {
             if (line.startsWith("data: ")) {
               const json = line.slice(6).trim();
               if (json && json !== "[DONE]") {
-                try { return resolve(JSON.parse(json)); } catch { /* skip */ }
+                try { lastValid = JSON.parse(json); } catch { /* skip */ }
               }
             }
           }
-          reject(new Error("No data in SSE response: " + raw.slice(0, 200)));
+          if (lastValid) resolve(lastValid);
+          else reject(new Error("No SSE data: " + raw.slice(0, 500)));
         } else {
           try { resolve(JSON.parse(raw)); }
           catch { reject(new Error("Parse error: " + raw.slice(0, 200))); }
@@ -67,44 +67,108 @@ function mcpCall(body: unknown): Promise<unknown> {
   });
 }
 
+function extractUrl(obj: unknown): string | null {
+  if (!obj || typeof obj !== "object") return null;
+  const o = obj as Record<string, unknown>;
+  for (const key of ["rawUrl", "url", "image_url", "imageUrl"]) {
+    if (typeof o[key] === "string" && (o[key] as string).startsWith("http")) {
+      return o[key] as string;
+    }
+  }
+  for (const key of ["results", "images"]) {
+    if (Array.isArray(o[key])) {
+      for (const item of o[key] as unknown[]) {
+        const url = extractUrl(item);
+        if (url) return url;
+      }
+    }
+  }
+  if (o.result && typeof o.result === "object") return extractUrl(o.result);
+  return null;
+}
+
+function extractContentText(result: unknown): string | null {
+  const rpcResult = (result as Record<string, unknown>)?.result as Record<string, unknown> | undefined;
+  const content = rpcResult?.content;
+  if (Array.isArray(content)) {
+    return content.find((c: Record<string, unknown>) => c.type === "text")?.text as string ?? null;
+  }
+  return null;
+}
+
+async function pollJob(jobId: string): Promise<string | null> {
+  const maxAttempts = 15;
+  const intervalMs = 4000;
+  for (let i = 0; i < maxAttempts; i++) {
+    if (i > 0) await new Promise(r => setTimeout(r, intervalMs));
+    try {
+      const result = await mcpCall({
+        jsonrpc: "2.0", method: "tools/call", id: 100 + i,
+        params: { name: "show_generations", arguments: { size: 20 } }
+      });
+      const text = extractContentText(result);
+      if (text) {
+        const parsed = JSON.parse(text);
+        const gens = parsed?.generations ?? parsed?.results ?? [];
+        const job = Array.isArray(gens)
+          ? (gens as Record<string, unknown>[]).find(g => g.id === jobId)
+          : null;
+        if (job?.status === "completed") {
+          const url = extractUrl(job);
+          if (url) return url;
+        }
+      }
+    } catch (e) {
+      console.error("[image-generate] poll attempt", i, "failed:", e);
+    }
+  }
+  return null;
+}
+
 async function generateImage(params: Record<string, unknown>): Promise<string | null> {
-  // 1. Initialize MCP session
   await mcpCall({ jsonrpc: "2.0", method: "initialize", id: 1, params: {
     protocolVersion: "2024-11-05",
     capabilities: {},
     clientInfo: { name: "slidein", version: "1.0" }
   }});
 
-  // 2. Call generate_image tool
   const result = await mcpCall({
-    jsonrpc: "2.0",
-    method: "tools/call",
-    id: 2,
-    params: {
-      name: "generate_image",
-      arguments: { params }
-    }
+    jsonrpc: "2.0", method: "tools/call", id: 2,
+    params: { name: "generate_image", arguments: { params } }
   }) as Record<string, unknown>;
 
-  // 3. Extract image URL from result
-  const content = (result?.result as Record<string, unknown>)?.content;
-  const text = Array.isArray(content)
-    ? content.find((c: Record<string, unknown>) => c.type === "text")?.text
-    : typeof content === "string" ? content : null;
+  const rpcResult = result?.result as Record<string, unknown> | undefined;
 
-  if (!text) return null;
+  if (result?.error) {
+    const e = result.error as Record<string, unknown>;
+    throw new Error(`MCP error: ${e.message ?? JSON.stringify(e)}`);
+  }
 
-  // Parse result to find URL
+  if (rpcResult?.isError) {
+    const content = rpcResult.content as Array<{type: string; text: string}> | undefined;
+    const msg = content?.find(c => c.type === "text")?.text ?? "Unknown error";
+    throw new Error(`Generate error: ${msg}`);
+  }
+
+  const text = extractContentText(result);
+  if (!text) {
+    console.error("[image-generate] no text content, raw result:", JSON.stringify(result).slice(0, 500));
+    return null;
+  }
+
   try {
-    const parsed = JSON.parse(text as string);
-    const items = parsed?.results ?? parsed?.images ?? [parsed];
-    for (const item of items) {
-      const url = item?.rawUrl ?? item?.url ?? item?.results?.rawUrl;
-      if (url) return url as string;
+    const parsed = JSON.parse(text);
+    const url = extractUrl(parsed);
+    if (url) return url;
+
+    const jobId = (parsed?.results as Record<string, unknown>[])?.[0]?.id ?? parsed?.id;
+    const status = (parsed?.results as Record<string, unknown>[])?.[0]?.status ?? parsed?.status;
+    if (jobId && status === "pending") {
+      console.log("[image-generate] job pending, polling:", jobId);
+      return await pollJob(jobId as string);
     }
   } catch {
-    // Try regex fallback
-    const match = (text as string).match(/https?:\/\/[^\s"']+\.(?:png|jpg|webp)/i);
+    const match = text.match(/https?:\/\/[^\s"']+\.(?:png|jpg|webp)/i);
     if (match) return match[0];
   }
   return null;
@@ -121,7 +185,7 @@ export async function POST(req: NextRequest) {
     const actualCount = Math.min(Math.max(1, count), 4);
 
     const params: Record<string, unknown> = {
-      model: "nano_banana_2",
+      model: "nano_banana_pro",
       prompt,
       aspect_ratio,
       resolution: res_param,
@@ -132,14 +196,12 @@ export async function POST(req: NextRequest) {
         role: "image",
         value: img.url,
       }));
-      console.log("[image-generate] MCP with", inputImages.length, "image(s)");
+      console.log("[image-generate] with", inputImages.length, "reference image(s)");
     }
 
-    console.log("[image-generate] calling mcp.higgsfield.ai generate_image");
+    console.log("[image-generate] calling MCP generate_image, model: nano_banana_pro");
 
-    const generateOne = async (): Promise<string | null> => {
-      return generateImage(params);
-    };
+    const generateOne = () => generateImage(params);
 
     const firstUrl = await generateOne();
     const images: string[] = firstUrl ? [firstUrl] : [];

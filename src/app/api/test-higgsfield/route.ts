@@ -2,10 +2,11 @@ import { NextResponse } from "next/server";
 import https from "https";
 
 export const runtime = "nodejs";
+export const maxDuration = 120;
 
 const KEY_SECRET = process.env.HIGGSFIELD_KEY_SECRET ?? "";
 
-function mcpPost(body: unknown): Promise<{ status: number; data: unknown }> {
+function mcpPost(body: unknown): Promise<{ status: number; data: unknown; raw?: string }> {
   return new Promise((resolve) => {
     const payload = JSON.stringify(body);
     const req = https.request({
@@ -18,7 +19,7 @@ function mcpPost(body: unknown): Promise<{ status: number; data: unknown }> {
         "Accept": "application/json, text/event-stream",
         "Authorization": `Bearer ${KEY_SECRET}`,
       },
-      timeout: 15000,
+      timeout: 110000,
     }, (res) => {
       const ct = res.headers["content-type"] ?? "";
       let raw = "";
@@ -26,15 +27,17 @@ function mcpPost(body: unknown): Promise<{ status: number; data: unknown }> {
       res.on("end", () => {
         if (ct.includes("text/event-stream")) {
           const lines = raw.split("\n");
+          let lastValid: unknown = null;
           for (const line of lines) {
             if (line.startsWith("data: ")) {
               const json = line.slice(6).trim();
               if (json && json !== "[DONE]") {
-                try { return resolve({ status: res.statusCode ?? 0, data: JSON.parse(json) }); } catch { /* skip */ }
+                try { lastValid = JSON.parse(json); } catch { /* skip */ }
               }
             }
           }
-          resolve({ status: res.statusCode ?? 0, data: { raw: raw.slice(0, 500) } });
+          if (lastValid) resolve({ status: res.statusCode ?? 0, data: lastValid });
+          else resolve({ status: res.statusCode ?? 0, data: null, raw: raw.slice(0, 800) });
         } else {
           try { resolve({ status: res.statusCode ?? 0, data: JSON.parse(raw) }); }
           catch { resolve({ status: res.statusCode ?? 0, data: raw.slice(0, 300) }); }
@@ -54,14 +57,11 @@ export async function GET() {
     protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1.0" }
   }});
 
-  // Step 2: list tools
-  const tools = await mcpPost({ jsonrpc: "2.0", method: "tools/list", id: 2 });
-
-  // Step 3: generate (get_cost only — no credits used)
-  const gen = await mcpPost({ jsonrpc: "2.0", method: "tools/call", id: 3, params: {
+  // Step 2: real generation (text-to-image, no credits check — nano_banana_pro)
+  const gen = await mcpPost({ jsonrpc: "2.0", method: "tools/call", id: 2, params: {
     name: "generate_image",
-    arguments: { params: { model: "nano_banana_2", prompt: "a woman in Paris", aspect_ratio: "1:1", get_cost: true } }
+    arguments: { params: { model: "nano_banana_pro", prompt: "a woman walking in Paris", aspect_ratio: "1:1" } }
   }});
 
-  return NextResponse.json({ init, tools, gen });
+  return NextResponse.json({ init, gen });
 }
