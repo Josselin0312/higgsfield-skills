@@ -5,6 +5,7 @@ export const runtime = "nodejs";
 
 const KEY_ID = process.env.HIGGSFIELD_KEY_ID ?? "";
 const KEY_SECRET = process.env.HIGGSFIELD_KEY_SECRET ?? "";
+const ANTHROPIC_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
 function post(hostname: string, path: string, body: unknown, headers: Record<string, string>): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve) => {
@@ -28,25 +29,28 @@ function post(hostname: string, path: string, body: unknown, headers: Record<str
   });
 }
 
-const V1H = { "hf-api-key": KEY_ID, "hf-secret": KEY_SECRET };
-const V2H = { "Authorization": `Key ${KEY_ID}:${KEY_SECRET}` };
 const MCP_BODY = { jsonrpc: "2.0", method: "tools/list", id: 1 };
 
 export async function GET() {
   const tests = [
-    // mcp.higgsfield.ai — le vrai serveur Higgsfield
-    { label: "MCP V2 auth tools/list",       host: "mcp.higgsfield.ai", path: "/mcp", body: MCP_BODY, headers: V2H },
-    { label: "MCP V1 auth tools/list",       host: "mcp.higgsfield.ai", path: "/mcp", body: MCP_BODY, headers: V1H },
-    { label: "MCP no auth tools/list",       host: "mcp.higgsfield.ai", path: "/mcp", body: MCP_BODY, headers: {} },
-    // Appel direct generate_image via MCP JSON-RPC
-    { label: "MCP V2 generate_image",        host: "mcp.higgsfield.ai", path: "/mcp", headers: V2H, body: {
-      jsonrpc: "2.0", method: "tools/call", id: 2,
-      params: { name: "generate_image", arguments: { params: { model: "nano_banana_2", prompt: "a woman in a city", aspect_ratio: "1:1", get_cost: true } } }
-    }},
-    // nano-banana sur platform avec empty input_images (test)
-    { label: "V1 nano-banana prompt réel empty[]", host: "platform.higgsfield.ai", path: "/v1/text2image/nano-banana", headers: V1H, body: {
-      params: { prompt: "a beautiful woman standing in Paris, photorealistic, cinematic", aspect_ratio: "1:1", resolution: "1k", input_images: [] }
-    }},
+    // Différents formats de token pour mcp.higgsfield.ai
+    { label: "MCP Bearer KEY_SECRET",           host: "mcp.higgsfield.ai", path: "/mcp", body: MCP_BODY, headers: { "Authorization": `Bearer ${KEY_SECRET}` } },
+    { label: "MCP Bearer KEY_ID:KEY_SECRET",    host: "mcp.higgsfield.ai", path: "/mcp", body: MCP_BODY, headers: { "Authorization": `Bearer ${KEY_ID}:${KEY_SECRET}` } },
+    { label: "MCP Bearer KEY_ID",               host: "mcp.higgsfield.ai", path: "/mcp", body: MCP_BODY, headers: { "Authorization": `Bearer ${KEY_ID}` } },
+    { label: "MCP Bearer ANTHROPIC_KEY",        host: "mcp.higgsfield.ai", path: "/mcp", body: MCP_BODY, headers: { "Authorization": `Bearer ${ANTHROPIC_KEY}` } },
+    { label: "MCP X-API-Key KEY_SECRET",        host: "mcp.higgsfield.ai", path: "/mcp", body: MCP_BODY, headers: { "X-API-Key": KEY_SECRET } },
+    // Appel Anthropic API avec mcp_servers — beta
+    { label: "Anthropic beta mcp_servers",      host: "api.anthropic.com", path: "/v1/messages", body: {
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 256,
+        mcp_servers: [{ type: "url", name: "higgsfield", url: "https://mcp.higgsfield.ai/mcp", authorization_token: KEY_SECRET }],
+        messages: [{ role: "user", content: "List available tools from higgsfield MCP server. Just say what tools are available." }]
+      }, headers: {
+        "x-api-key": ANTHROPIC_KEY,
+        "anthropic-version": "2023-06-01",
+        "anthropic-beta": "mcp-client-2025-04-04"
+      }
+    },
   ];
 
   const results = await Promise.all(
@@ -56,6 +60,6 @@ export async function GET() {
     })
   );
 
-  const working = results.filter(r => r.status !== 404 && r.status !== 403 && r.status !== -1 && r.status !== -2);
-  return NextResponse.json({ working, all: results });
+  const working = results.filter(r => r.status !== 401 && r.status !== 403 && r.status !== 404 && r.status !== -1 && r.status !== -2);
+  return NextResponse.json({ working, all: results.map(r => ({ label: r.label, status: r.status, snippet: JSON.stringify(r.data).slice(0, 150) })) });
 }
