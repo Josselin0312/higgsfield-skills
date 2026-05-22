@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { promises as fs } from "fs";
 
 export const runtime = "nodejs";
-export const maxDuration = 300;
+export const maxDuration = 30;
 
 const MCP_URL =
   "https://api.anthropic.com/v2/ccr-sessions/cse_01GXDJAa3epZEUUdAAJuYMCq/mcp" +
@@ -27,7 +27,7 @@ async function getToken(): Promise<string> {
   return (await fs.readFile(TOKEN_FILE, "utf8")).trim();
 }
 
-async function mcpPost(token: string, method: string, params: unknown, id: number): Promise<unknown> {
+async function mcpPost(token: string, params: unknown, id: number): Promise<unknown> {
   const res = await fetch(MCP_URL, {
     method: "POST",
     headers: {
@@ -38,7 +38,7 @@ async function mcpPost(token: string, method: string, params: unknown, id: numbe
       "X-MCP-Server-ID": SERVER_ID,
       "anthropic-version": "2023-06-01",
     },
-    body: JSON.stringify({ jsonrpc: "2.0", method, id, params }),
+    body: JSON.stringify({ jsonrpc: "2.0", method: "tools/call", id, params }),
   });
 
   const ct = res.headers.get("content-type") ?? "";
@@ -54,33 +54,10 @@ async function mcpPost(token: string, method: string, params: unknown, id: numbe
         }
       }
     }
-    if (!last) throw new Error("SSE vide: " + raw.slice(0, 300));
+    if (!last) throw new Error("SSE vide");
     return last;
   }
-
   return JSON.parse(raw);
-}
-
-function extractUrl(obj: unknown): string | null {
-  if (!obj || typeof obj !== "object") return null;
-  const o = obj as Record<string, unknown>;
-  for (const k of ["rawUrl", "url", "raw_url", "image_url"]) {
-    if (typeof o[k] === "string" && (o[k] as string).startsWith("http")) return o[k] as string;
-  }
-  for (const k of ["results", "images"]) {
-    if (typeof o[k] === "object" && o[k] !== null) {
-      const u = extractUrl(o[k]);
-      if (u) return u;
-    }
-    if (Array.isArray(o[k])) {
-      for (const item of o[k] as unknown[]) {
-        const u = extractUrl(item);
-        if (u) return u;
-      }
-    }
-  }
-  if (o.generation) return extractUrl(o.generation);
-  return null;
 }
 
 function getRpcResult(rpc: unknown): Record<string, unknown> | null {
@@ -97,74 +74,27 @@ function getRpcResult(rpc: unknown): Record<string, unknown> | null {
   return result ?? null;
 }
 
-async function pollJob(jobId: string, attempts = 5, delaySec = 6): Promise<string | null> {
-  for (let i = 0; i < attempts; i++) {
-    if (i > 0) await new Promise(r => setTimeout(r, delaySec * 1000));
-
-    const token = await getToken();
-    let rpc: unknown;
-    try {
-      rpc = await mcpPost(token, "tools/call", {
-        name: "job_status",
-        arguments: { jobId, sync: true },
-      }, Math.floor(Math.random() * 9000) + 100);
-    } catch { continue; }
-
-    let result: Record<string, unknown> | null;
-    try { result = getRpcResult(rpc); } catch { continue; }
-    if (!result) continue;
-
-    // Try structuredContent first (most reliable)
-    const sc = result.structuredContent as Record<string, unknown> | undefined;
-    if (sc) {
-      const url = extractUrl(sc);
-      if (url) return url;
-    }
-
-    // Fallback: grep URL from text content
-    const content = result.content as Array<{ type: string; text?: string; uri?: string }> | undefined;
-    if (Array.isArray(content)) {
-      for (const item of content) {
-        if (item.uri?.startsWith("http")) return item.uri;
-        if (item.text) {
-          const match = item.text.match(/https?:\/\/\S+\.(?:png|jpg|webp|jpeg)/i);
-          if (match) return match[0];
-        }
-      }
-    }
-  }
-
-  return null;
-}
-
-async function generateOne(params: Record<string, unknown>): Promise<string | null> {
+async function submitJob(params: Record<string, unknown>): Promise<string> {
   const token = await getToken();
-  const rpc = await mcpPost(token, "tools/call", {
+  const rpc = await mcpPost(token, {
     name: "generate_image",
     arguments: { params },
-  }, 2);
+  }, Math.floor(Math.random() * 9000) + 1);
 
   const result = getRpcResult(rpc);
-  if (!result) return null;
+  if (!result) throw new Error("generate_image: no result");
 
-  // Get job ID from structuredContent
   const sc = result.structuredContent as Record<string, unknown> | undefined;
   const results = sc?.results as Array<Record<string, unknown>> | undefined;
   const jobId = results?.[0]?.id as string | undefined;
+  if (!jobId) throw new Error("generate_image: no jobId in response");
 
-  if (!jobId) {
-    // Maybe image was returned immediately
-    const url = extractUrl(sc ?? result);
-    return url;
-  }
-
-  return await pollJob(jobId);
+  return jobId;
 }
 
 export async function POST(req: NextRequest) {
   try {
     const { prompt, resolution, quality, count, inputImages = [] } = await req.json();
-    console.log("[image-generate] prompt:", prompt?.slice(0, 50), "| images:", (inputImages as unknown[]).length, "| res:", resolution, "| quality:", quality);
     if (!prompt?.trim()) return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
 
     const params: Record<string, unknown> = {
@@ -175,28 +105,26 @@ export async function POST(req: NextRequest) {
     };
 
     if ((inputImages as unknown[]).length > 0) {
-      params.medias = (inputImages as { id: string; url: string }[]).map(img => ({
+      params.medias = (inputImages as { url: string }[]).map(img => ({
         role: "image",
-        value: img.url, // URL CDN publique Higgsfield
+        value: img.url,
       }));
     }
 
     const actualCount = Math.min(Math.max(1, count ?? 1), 4);
-    console.log("[image-generate] params:", JSON.stringify(params).slice(0, 200));
-    const first = await generateOne(params);
-    console.log("[image-generate] first url:", first);
-    const images: string[] = first ? [first] : [];
+    const settled = await Promise.allSettled(
+      Array.from({ length: actualCount }, () => submitJob(params))
+    );
+    const jobIds = settled
+      .filter((r): r is PromiseFulfilledResult<string> => r.status === "fulfilled")
+      .map(r => r.value);
 
-    if (actualCount > 1) {
-      const rest = await Promise.allSettled(
-        Array.from({ length: actualCount - 1 }, () => generateOne(params))
-      );
-      rest.forEach(r => { if (r.status === "fulfilled" && r.value) images.push(r.value); });
+    if (jobIds.length === 0) {
+      const err = settled.find(r => r.status === "rejected") as PromiseRejectedResult | undefined;
+      return NextResponse.json({ error: err?.reason?.message ?? "Submit échoué" }, { status: 500 });
     }
 
-    if (images.length === 0) return NextResponse.json({ error: "Aucune image générée" }, { status: 500 });
-
-    return NextResponse.json({ images });
+    return NextResponse.json({ jobIds });
   } catch (err) {
     const msg = err instanceof Error ? err.message : String(err);
     console.error("[image-generate]", msg);

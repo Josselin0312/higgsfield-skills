@@ -273,11 +273,13 @@ export default function GenerationPage() {
     if (!row || row.status === "loading") return;
     updateRow(id, { status: "loading", outputImages: [], errorMsg: undefined });
     try {
+      // Upload reference images if any
       const uploaded = await Promise.all(
         row.imageInput.map((img) => img.startsWith("data:") ? uploadFromBrowser(img) : Promise.resolve({ id: img, url: img }))
       );
       const inputImages = uploaded.map(({ id, url }) => ({ id, type: "media_input", url }));
 
+      // Submit jobs — fast (~3s), returns job IDs
       const res = await fetch("/api/image-generate", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -290,11 +292,31 @@ export default function GenerationPage() {
         }),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Erreur API");
-      updateRow(id, { status: "done", outputImages: data.images ?? [] });
+      if (!res.ok) throw new Error(data.error ?? "Erreur soumission");
+      const jobIds: string[] = data.jobIds ?? [];
+      if (jobIds.length === 0) throw new Error("Aucun job soumis");
+
+      // Poll until all images are ready (each poll ~2-3s, no timeout issues)
+      const images: string[] = [];
+      const pending = new Set<string>(jobIds);
+      const deadline = Date.now() + 3 * 60 * 1000; // 3 min max
+
+      while (pending.size > 0 && Date.now() < deadline) {
+        await new Promise(r => setTimeout(r, 3000));
+        for (const jobId of [...pending]) {
+          const sr = await fetch(`/api/job-status?jobId=${jobId}`);
+          const sd = await sr.json();
+          if (sd.done && sd.url) {
+            images.push(sd.url);
+            pending.delete(jobId);
+          }
+        }
+      }
+
+      if (images.length === 0) throw new Error("Timeout — aucune image reçue");
+      updateRow(id, { status: "done", outputImages: images });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
-      fetch("/api/log", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ msg, rowId: id, prompt: rowsBySection[activeSection].find(r => r.id === id)?.prompt?.slice(0, 50) }) });
       updateRow(id, { status: "error", errorMsg: msg });
     }
   };
