@@ -19,8 +19,7 @@ const RESOLUTION_MAP: Record<string, string> = {
   "4K": "4k",
 };
 
-const KEY_ID     = process.env.HIGGSFIELD_KEY_ID ?? "";
-const KEY_SECRET = process.env.HIGGSFIELD_KEY_SECRET ?? "";
+const HIGGSFIELD_TOKEN = process.env.HIGGSFIELD_TOKEN ?? "";
 
 function mcpCall(body: unknown): Promise<unknown> {
   return new Promise((resolve, reject) => {
@@ -33,7 +32,7 @@ function mcpCall(body: unknown): Promise<unknown> {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(payload),
         "Accept": "application/json, text/event-stream",
-        "Authorization": `Key ${KEY_ID}:${KEY_SECRET}`,
+        "Authorization": `Bearer ${HIGGSFIELD_TOKEN}`,
       },
       timeout: 270000,
     }, (res) => {
