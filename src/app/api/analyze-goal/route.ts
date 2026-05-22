@@ -33,25 +33,37 @@ export async function POST(req: NextRequest) {
       | "image/gif"
       | "image/webp";
 
-    const response = await client.messages.create({
+    const makeRequest = () => client.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 2048,
       messages: [
         {
           role: "user",
           content: [
-            {
-              type: "image",
-              source: { type: "base64", media_type: mediaType, data },
-            },
+            { type: "image", source: { type: "base64", media_type: mediaType, data } },
             { type: "text", text: SCENE_PROMPT },
           ],
         },
       ],
     });
 
+    let response;
+    for (let attempt = 0; attempt < 4; attempt++) {
+      try {
+        response = await makeRequest();
+        break;
+      } catch (e: unknown) {
+        const status = (e as { status?: number }).status;
+        if (status === 529 && attempt < 3) {
+          await new Promise((r) => setTimeout(r, (attempt + 1) * 3000));
+          continue;
+        }
+        throw e;
+      }
+    }
+
     const analysis =
-      response.content[0].type === "text" ? response.content[0].text : "";
+      response!.content[0].type === "text" ? response!.content[0].text : "";
 
     return NextResponse.json({ prompt: REPRO_PREFIX + analysis });
   } catch (err) {
