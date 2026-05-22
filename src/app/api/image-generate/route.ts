@@ -61,111 +61,96 @@ async function mcpPost(token: string, method: string, params: unknown, id: numbe
   return JSON.parse(raw);
 }
 
-function pickUrl(obj: unknown): string | null {
+function extractUrl(obj: unknown): string | null {
   if (!obj || typeof obj !== "object") return null;
   const o = obj as Record<string, unknown>;
-  for (const k of ["url", "rawUrl", "raw_url", "image_url", "imageUrl"]) {
+  for (const k of ["rawUrl", "url", "raw_url", "image_url"]) {
     if (typeof o[k] === "string" && (o[k] as string).startsWith("http")) return o[k] as string;
   }
-  for (const k of ["results", "images", "outputs"]) {
+  for (const k of ["results", "images"]) {
+    if (typeof o[k] === "object" && o[k] !== null) {
+      const u = extractUrl(o[k]);
+      if (u) return u;
+    }
     if (Array.isArray(o[k])) {
       for (const item of o[k] as unknown[]) {
-        const u = pickUrl(item);
+        const u = extractUrl(item);
         if (u) return u;
       }
     }
   }
-  if (o.result) return pickUrl(o.result);
+  if (o.generation) return extractUrl(o.generation);
   return null;
 }
 
-function parseToolResult(result: unknown): { url: string | null; jobId: string | null } {
-  const rpc = result as Record<string, unknown>;
-
-  if (rpc?.error) {
-    const e = rpc.error as Record<string, unknown>;
+function getRpcResult(rpc: unknown): Record<string, unknown> | null {
+  const r = rpc as Record<string, unknown>;
+  if (r?.error) {
+    const e = r.error as Record<string, unknown>;
     throw new Error("MCP error: " + (e.message ?? JSON.stringify(e)));
   }
-
-  const rpcResult = rpc?.result as Record<string, unknown> | undefined;
-  if (rpcResult?.isError) {
-    const content = rpcResult.content as Array<{ type: string; text: string }>;
-    throw new Error(content?.find(c => c.type === "text")?.text ?? "Erreur génération");
+  const result = r?.result as Record<string, unknown> | undefined;
+  if (result?.isError) {
+    const content = result.content as Array<{ type: string; text: string }>;
+    throw new Error(content?.find(c => c.type === "text")?.text ?? "Erreur MCP");
   }
-
-  const content = rpcResult?.content;
-  if (!Array.isArray(content)) return { url: null, jobId: null };
-
-  const textItem = content.find((c: Record<string, unknown>) => c.type === "text") as
-    | Record<string, unknown>
-    | undefined;
-  if (!textItem) return { url: null, jobId: null };
-
-  const text = textItem.text as string;
-
-  // Try direct URL in text
-  const urlMatch = text.match(/https?:\/\/[^\s"'<>]+\.(?:png|jpg|webp|jpeg)/i);
-  if (urlMatch) return { url: urlMatch[0], jobId: null };
-
-  // Try JSON parsing
-  try {
-    const parsed = JSON.parse(text);
-    const directUrl = pickUrl(parsed);
-    if (directUrl) return { url: directUrl, jobId: null };
-
-    const results = parsed?.results as Record<string, unknown>[] | undefined;
-    const jobId = (results?.[0]?.id ?? parsed?.id) as string | undefined;
-    const status = (results?.[0]?.status ?? parsed?.status) as string | undefined;
-    if (jobId && status === "pending") return { url: null, jobId };
-  } catch { /* not JSON */ }
-
-  return { url: null, jobId: null };
+  return result ?? null;
 }
 
 async function pollJob(jobId: string): Promise<string | null> {
-  for (let i = 0; i < 20; i++) {
-    if (i > 0) await new Promise(r => setTimeout(r, 3000));
-    try {
-      const token = await getToken();
-      const result = await mcpPost(token, "tools/call", {
-        name: "show_generations",
-        arguments: { size: 20 },
-      }, 100 + i) as Record<string, unknown>;
+  const token = await getToken();
+  const rpc = await mcpPost(token, "tools/call", {
+    name: "job_status",
+    arguments: { jobId, sync: true },
+  }, Math.floor(Math.random() * 9000) + 100);
 
-      const rpcResult = result?.result as Record<string, unknown> | undefined;
-      const content = rpcResult?.content;
-      if (!Array.isArray(content)) continue;
+  const result = getRpcResult(rpc);
+  if (!result) return null;
 
-      const textItem = content.find((c: Record<string, unknown>) => c.type === "text") as
-        | Record<string, unknown>
-        | undefined;
-      if (!textItem) continue;
-
-      const parsed = JSON.parse(textItem.text as string);
-      const gens = parsed?.generations ?? parsed?.results ?? [];
-      if (!Array.isArray(gens)) continue;
-
-      const job = (gens as Record<string, unknown>[]).find(g => g.id === jobId);
-      if (job?.status === "completed") {
-        const u = pickUrl(job);
-        if (u) return u;
-      }
-    } catch { /* retry */ }
+  // Try structuredContent first (most reliable)
+  const sc = result.structuredContent as Record<string, unknown> | undefined;
+  if (sc) {
+    const url = extractUrl(sc);
+    if (url) return url;
   }
+
+  // Fallback: grep URL from text content
+  const content = result.content as Array<{ type: string; text?: string; uri?: string }> | undefined;
+  if (Array.isArray(content)) {
+    for (const item of content) {
+      if (item.uri?.startsWith("http")) return item.uri;
+      if (item.text) {
+        const match = item.text.match(/https?:\/\/\S+\.(?:png|jpg|webp|jpeg)/i);
+        if (match) return match[0];
+      }
+    }
+  }
+
   return null;
 }
 
 async function generateOne(params: Record<string, unknown>): Promise<string | null> {
   const token = await getToken();
-  const result = await mcpPost(token, "tools/call", {
+  const rpc = await mcpPost(token, "tools/call", {
     name: "generate_image",
     arguments: { params },
   }, 2);
 
-  const { url, jobId } = parseToolResult(result);
-  if (url) return url;
-  if (jobId) return await pollJob(jobId);
-  return null;
+  const result = getRpcResult(rpc);
+  if (!result) return null;
+
+  // Get job ID from structuredContent
+  const sc = result.structuredContent as Record<string, unknown> | undefined;
+  const results = sc?.results as Array<Record<string, unknown>> | undefined;
+  const jobId = results?.[0]?.id as string | undefined;
+
+  if (!jobId) {
+    // Maybe image was returned immediately
+    const url = extractUrl(sc ?? result);
+    return url;
+  }
+
+  return await pollJob(jobId);
 }
 
 export async function POST(req: NextRequest) {
@@ -180,7 +165,7 @@ export async function POST(req: NextRequest) {
       resolution: quality === "4K" ? "4k" : quality === "2K" ? "2k" : "1k",
     };
 
-    if (inputImages.length > 0) {
+    if ((inputImages as unknown[]).length > 0) {
       params.medias = (inputImages as { url: string }[]).map(img => ({
         role: "image",
         value: img.url,
