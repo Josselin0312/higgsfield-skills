@@ -24,7 +24,13 @@ const ASPECT_RATIO: Record<string, string> = {
 };
 
 async function getToken(): Promise<string> {
-  return (await fs.readFile(TOKEN_FILE, "utf8")).trim();
+  try {
+    return (await fs.readFile(TOKEN_FILE, "utf8")).trim();
+  } catch {
+    const t = process.env.ANTHROPIC_API_KEY;
+    if (!t) throw new Error("Pas de token auth disponible");
+    return t;
+  }
 }
 
 async function mcpPost(token: string, params: unknown, id: number): Promise<unknown> {

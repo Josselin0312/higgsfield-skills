@@ -15,7 +15,13 @@ const SERVER_ID  = "c178aafb-b1b4-4edb-8dce-d398985af22d";
 const TOKEN_FILE = "/home/claude/.claude/remote/.session_ingress_token";
 
 async function getToken(): Promise<string> {
-  return (await fs.readFile(TOKEN_FILE, "utf8")).trim();
+  try {
+    return (await fs.readFile(TOKEN_FILE, "utf8")).trim();
+  } catch {
+    const t = process.env.ANTHROPIC_API_KEY;
+    if (!t) throw new Error("Pas de token auth disponible");
+    return t;
+  }
 }
 
 function extractUrl(obj: unknown): string | null {
