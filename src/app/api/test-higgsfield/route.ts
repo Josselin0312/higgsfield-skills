@@ -4,43 +4,26 @@ import https from "https";
 export const runtime = "nodejs";
 export const maxDuration = 120;
 
-const CLERK_CLIENT = process.env.HIGGSFIELD_CLERK_CLIENT ?? "";
-const SESSION_ID   = process.env.HIGGSFIELD_SESSION_ID ?? "";
+const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY ?? "";
 
-async function getFreshJWT(): Promise<{ ok: boolean; jwt?: string; error?: string }> {
-  try {
-    const res = await fetch(
-      `https://clerk.higgsfield.ai/v1/client/sessions/${SESSION_ID}/tokens`,
-      {
-        method: "POST",
-        headers: {
-          "Cookie": `__client=${CLERK_CLIENT}`,
-          "Origin": "https://higgsfield.ai",
-          "Referer": "https://higgsfield.ai/",
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      }
-    );
-    const data = await res.json() as Record<string, unknown>;
-    if (data.jwt) return { ok: true, jwt: data.jwt as string };
-    return { ok: false, error: `status ${res.status}: ${JSON.stringify(data).slice(0, 200)}` };
-  } catch (e) {
-    return { ok: false, error: String(e) };
-  }
-}
+const CCR_URL = "https://api.anthropic.com/v2/ccr-sessions/cse_01WCSTZL9J21d5SBhnwQpJoD/mcp?mcp_url=https%3A%2F%2Fmcp.higgsfield.ai%2Fmcp&mcp_server_id=e9a62de2-1f4c-599e-b868-f39d4b4726b8&toolbox_mcp_server_id=c178aafb-b1b4-4edb-8dce-d398985af22d";
 
-function mcpPost(body: unknown, jwt: string): Promise<{ status: number; data: unknown }> {
+function ccrPost(body: unknown): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve) => {
+    const url = new URL(CCR_URL);
     const payload = JSON.stringify(body);
     const req = https.request({
-      hostname: "mcp.higgsfield.ai",
-      path: "/mcp",
+      hostname: url.hostname,
+      path: url.pathname + url.search,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(payload),
         "Accept": "application/json, text/event-stream",
-        "Authorization": `Bearer ${jwt}`,
+        "x-api-key": ANTHROPIC_API_KEY,
+        "anthropic-version": "2023-06-01",
+        "X-Session-UUID": "cse_01WCSTZL9J21d5SBhnwQpJoD",
+        "X-MCP-Server-ID": "c178aafb-b1b4-4edb-8dce-d398985af22d",
       },
       timeout: 110000,
     }, (res) => {
@@ -74,21 +57,14 @@ function mcpPost(body: unknown, jwt: string): Promise<{ status: number; data: un
 }
 
 export async function GET() {
-  const tokenResult = await getFreshJWT();
-  if (!tokenResult.ok || !tokenResult.jwt) {
-    return NextResponse.json({ error: "JWT refresh failed", detail: tokenResult.error });
-  }
-
-  const jwt = tokenResult.jwt;
-
-  const init = await mcpPost({ jsonrpc: "2.0", method: "initialize", id: 1, params: {
+  const init = await ccrPost({ jsonrpc: "2.0", method: "initialize", id: 1, params: {
     protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1.0" }
-  }}, jwt);
+  }});
 
-  const gen = await mcpPost({ jsonrpc: "2.0", method: "tools/call", id: 2, params: {
+  const gen = await ccrPost({ jsonrpc: "2.0", method: "tools/call", id: 2, params: {
     name: "generate_image",
     arguments: { params: { model: "nano_banana_pro", prompt: "a woman walking in Paris", aspect_ratio: "1:1" } }
-  }}, jwt);
+  }});
 
-  return NextResponse.json({ tokenRefresh: "ok", init, gen });
+  return NextResponse.json({ init, gen });
 }
