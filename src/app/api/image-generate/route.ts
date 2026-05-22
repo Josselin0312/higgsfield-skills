@@ -156,6 +156,7 @@ async function generateOne(params: Record<string, unknown>): Promise<string | nu
 export async function POST(req: NextRequest) {
   try {
     const { prompt, resolution, quality, count, inputImages = [] } = await req.json();
+    console.log("[image-generate] prompt:", prompt?.slice(0, 50), "| images:", (inputImages as unknown[]).length, "| res:", resolution, "| quality:", quality);
     if (!prompt?.trim()) return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
 
     const params: Record<string, unknown> = {
@@ -173,7 +174,9 @@ export async function POST(req: NextRequest) {
     }
 
     const actualCount = Math.min(Math.max(1, count ?? 1), 4);
+    console.log("[image-generate] params:", JSON.stringify(params).slice(0, 200));
     const first = await generateOne(params);
+    console.log("[image-generate] first url:", first);
     const images: string[] = first ? [first] : [];
 
     if (actualCount > 1) {
