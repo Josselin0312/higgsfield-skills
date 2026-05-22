@@ -191,15 +191,38 @@ export default function GenerationPage() {
     }));
   };
 
+  const compressImage = (base64: string, maxBytes = 4 * 1024 * 1024): Promise<string> =>
+    new Promise((resolve) => {
+      const img = new Image();
+      img.onload = () => {
+        let { width, height } = img;
+        let quality = 0.85;
+        const canvas = document.createElement("canvas");
+        const tryEncode = () => {
+          canvas.width = width;
+          canvas.height = height;
+          canvas.getContext("2d")!.drawImage(img, 0, 0, width, height);
+          const result = canvas.toDataURL("image/jpeg", quality);
+          const bytes = Math.round((result.length - result.indexOf(",") - 1) * 0.75);
+          if (bytes <= maxBytes || (width <= 512 && quality <= 0.5)) return resolve(result);
+          if (quality > 0.5) { quality -= 0.15; } else { width = Math.round(width * 0.75); height = Math.round(height * 0.75); quality = 0.75; }
+          tryEncode();
+        };
+        tryEncode();
+      };
+      img.src = base64;
+    });
+
   const handleAnalyzeGoal = async (id: string) => {
     const row = rowsBySection[activeSection].find((r) => r.id === id);
     if (!row || !row.imageReproduction[0]) return;
     setAnalyzing((prev) => ({ ...prev, [id]: true }));
     try {
+      const goalImage = await compressImage(row.imageReproduction[0]);
       const res = await fetch("/api/analyze-goal", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ goalImage: row.imageReproduction[0] }),
+        body: JSON.stringify({ goalImage }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erreur analyse");
