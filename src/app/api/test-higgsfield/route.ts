@@ -7,42 +7,26 @@ export const maxDuration = 120;
 const KEY_ID     = process.env.HIGGSFIELD_KEY_ID ?? "";
 const KEY_SECRET = process.env.HIGGSFIELD_KEY_SECRET ?? "";
 
-function mcpPost(body: unknown): Promise<{ status: number; data: unknown; raw?: string }> {
+function post(hostname: string, path: string, body: unknown, auth: string): Promise<{ status: number; data: unknown }> {
   return new Promise((resolve) => {
     const payload = JSON.stringify(body);
     const req = https.request({
-      hostname: "mcp.higgsfield.ai",
-      path: "/mcp",
+      hostname,
+      path,
       method: "POST",
       headers: {
         "Content-Type": "application/json",
         "Content-Length": Buffer.byteLength(payload),
         "Accept": "application/json, text/event-stream",
-        "Authorization": `Key ${KEY_ID}:${KEY_SECRET}`,
+        "Authorization": auth,
       },
-      timeout: 110000,
+      timeout: 30000,
     }, (res) => {
-      const ct = res.headers["content-type"] ?? "";
       let raw = "";
       res.on("data", (c) => (raw += c));
       res.on("end", () => {
-        if (ct.includes("text/event-stream")) {
-          const lines = raw.split("\n");
-          let lastValid: unknown = null;
-          for (const line of lines) {
-            if (line.startsWith("data: ")) {
-              const json = line.slice(6).trim();
-              if (json && json !== "[DONE]") {
-                try { lastValid = JSON.parse(json); } catch { /* skip */ }
-              }
-            }
-          }
-          if (lastValid) resolve({ status: res.statusCode ?? 0, data: lastValid });
-          else resolve({ status: res.statusCode ?? 0, data: null, raw: raw.slice(0, 800) });
-        } else {
-          try { resolve({ status: res.statusCode ?? 0, data: JSON.parse(raw) }); }
-          catch { resolve({ status: res.statusCode ?? 0, data: raw.slice(0, 300) }); }
-        }
+        try { resolve({ status: res.statusCode ?? 0, data: JSON.parse(raw) }); }
+        catch { resolve({ status: res.statusCode ?? 0, data: raw.slice(0, 300) }); }
       });
     });
     req.on("error", (e) => resolve({ status: -1, data: e.message }));
@@ -53,16 +37,42 @@ function mcpPost(body: unknown): Promise<{ status: number; data: unknown; raw?: 
 }
 
 export async function GET() {
-  // Step 1: initialize
-  const init = await mcpPost({ jsonrpc: "2.0", method: "initialize", id: 1, params: {
-    protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1.0" }
-  }});
+  const keyAuth   = `Key ${KEY_ID}:${KEY_SECRET}`;
+  const bearerKey = `Bearer ${KEY_SECRET}`;
 
-  // Step 2: real generation (text-to-image, no credits check — nano_banana_pro)
-  const gen = await mcpPost({ jsonrpc: "2.0", method: "tools/call", id: 2, params: {
-    name: "generate_image",
-    arguments: { params: { model: "nano_banana_pro", prompt: "a woman walking in Paris", aspect_ratio: "1:1" } }
-  }});
+  // Test 1: v2 REST — nano-banana-pro text-to-image
+  const v2NbPro = await post(
+    "platform.higgsfield.ai",
+    "/nano-banana-pro/text-to-image",
+    { prompt: "a woman in Paris", aspect_ratio: "1:1" },
+    keyAuth
+  );
 
-  return NextResponse.json({ init, gen });
+  // Test 2: v2 REST — nano-banana-2 text-to-image
+  const v2Nb2 = await post(
+    "platform.higgsfield.ai",
+    "/nano-banana-2/text-to-image",
+    { prompt: "a woman in Paris", aspect_ratio: "1:1" },
+    keyAuth
+  );
+
+  // Test 3: v2 REST — list available models/endpoints
+  const v2Models = await post(
+    "platform.higgsfield.ai",
+    "/models",
+    {},
+    keyAuth
+  );
+
+  // Test 4: MCP init — Bearer KEY_SECRET (old working format)
+  const mcpInit = await post(
+    "mcp.higgsfield.ai",
+    "/mcp",
+    { jsonrpc: "2.0", method: "initialize", id: 1, params: {
+      protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1.0" }
+    }},
+    bearerKey
+  );
+
+  return NextResponse.json({ v2NbPro, v2Nb2, v2Models, mcpInit });
 }
