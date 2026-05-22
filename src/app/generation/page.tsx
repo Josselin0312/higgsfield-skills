@@ -238,18 +238,19 @@ export default function GenerationPage() {
     const [header, data] = base64.split(",");
     const contentType = header.match(/:(.*?);/)?.[1] ?? "image/jpeg";
 
+    // 1. Obtenir l'URL de upload Higgsfield via MCP
     const urlRes = await fetch("/api/upload-url", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({ content_type: contentType }),
     });
     if (!urlRes.ok) throw new Error("Erreur obtention URL upload");
-    const { upload_url, public_url } = await urlRes.json();
+    const { upload_url, media_id, public_url } = await urlRes.json();
 
+    // 2. Uploader les bytes vers S3
     const binary = atob(data);
     const bytes = new Uint8Array(binary.length);
     for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-
     const putRes = await fetch(upload_url, {
       method: "PUT",
       headers: { "Content-Type": contentType },
@@ -257,8 +258,14 @@ export default function GenerationPage() {
     });
     if (!putRes.ok) throw new Error(`Upload S3 échoué: ${putRes.status}`);
 
-    const id = public_url.split("/").pop()?.replace(/\.[^.]+$/, "") ?? crypto.randomUUID();
-    return { id, url: public_url };
+    // 3. Confirmer le média dans Higgsfield
+    await fetch("/api/media-confirm", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ media_id }),
+    });
+
+    return { id: media_id, url: media_id };
   };
 
   const handleGenerate = async (id: string) => {
