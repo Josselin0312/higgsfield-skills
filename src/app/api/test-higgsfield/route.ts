@@ -69,15 +69,34 @@ export async function GET() {
     return { status: res.status, data };
   }
 
+  // Also try GET on root to discover API structure
+  const rootRes = await fetch("https://fnf.higgsfield.ai/", {
+    headers: { Authorization: `Bearer ${jwt}`, "Origin": "https://higgsfield.ai" },
+  });
+  const rootData = await rootRes.text().then(t => { try { return JSON.parse(t); } catch { return t.slice(0,300); } });
+
   const fnfResults = await Promise.all([
-    tryFnfJwt("/generate/image", withModel),
-    tryFnfJwt("/v1/images/generate", withModel),
-    tryFnfJwt("/v2/generate/image", withModel),
+    tryFnfJwt("/nano_banana_pro", base),
+    tryFnfJwt("/nano_banana_2", base),
+    tryFnfJwt("/image", withModel),
+    tryFnfJwt("/images", withModel),
+    tryFnfJwt("/text-to-image", withModel),
+    tryFnfJwt("/infer", withModel),
+    tryFnfJwt("/inference", withModel),
+    tryFnfJwt("/run", withModel),
+    tryFnfJwt("/predict", withModel),
   ]);
 
   return NextResponse.json({
-    "fnf+JWT — /generate/image":       fnfResults[0],
-    "fnf+JWT — /v1/images/generate":   fnfResults[1],
-    "fnf+JWT — /v2/generate/image":    fnfResults[2],
+    "fnf GET /": { status: rootRes.status, data: rootData },
+    "fnf — /nano_banana_pro":   fnfResults[0],
+    "fnf — /nano_banana_2":     fnfResults[1],
+    "fnf — /image":             fnfResults[2],
+    "fnf — /images":            fnfResults[3],
+    "fnf — /text-to-image":     fnfResults[4],
+    "fnf — /infer":             fnfResults[5],
+    "fnf — /inference":         fnfResults[6],
+    "fnf — /run":               fnfResults[7],
+    "fnf — /predict":           fnfResults[8],
   });
 }
