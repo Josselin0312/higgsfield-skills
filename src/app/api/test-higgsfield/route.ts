@@ -20,23 +20,26 @@ async function tryPost(path: string, body: unknown) {
   return { status: res.status, data };
 }
 
-async function tryMcp(authHeader: string) {
+async function tryMcp(authHeader: string, extraAccept?: string) {
+  const accept = extraAccept ?? "application/json, text/event-stream";
   const res = await fetch("https://mcp.higgsfield.ai/mcp", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": authHeader,
+      "Accept": accept,
     },
     body: JSON.stringify({
       jsonrpc: "2.0", method: "tools/call", id: 1,
       params: {
         name: "generate_image",
-        arguments: { params: { model: "nano_banana_pro", prompt: "a red apple", aspect_ratio: "1:1", resolution: "1k" } }
+        arguments: { params: { model: "nano_banana_pro", prompt: "a red apple", aspect_ratio: "1:1", resolution: "1k", get_cost: true } }
       }
     }),
   });
+  const raw = await res.text();
   let data: unknown;
-  try { data = await res.json(); } catch { data = await res.text(); }
+  try { data = JSON.parse(raw); } catch { data = raw.slice(0, 500); }
   return { status: res.status, data };
 }
 
@@ -56,9 +59,23 @@ export async function GET() {
     tryPost("/images/generate", { ...body, model: "nano_banana_pro" }),
   ]);
 
-  // Test MCP endpoint directly
-  const mcpKey    = await tryMcp(auth());
-  const mcpBearer = await tryMcp(`Bearer ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`);
+  const bearer = `Bearer ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
+
+  // Test MCP endpoint — Bearer with correct Accept header
+  const mcpFixed   = await tryMcp(bearer);
+  // Also try MCP initialize to discover server (cheaper)
+  const mcpInitRes = await fetch("https://mcp.higgsfield.ai/mcp", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": bearer,
+      "Accept": "application/json, text/event-stream",
+    },
+    body: JSON.stringify({ jsonrpc: "2.0", method: "initialize", id: 0, params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } } }),
+  });
+  const mcpInitRaw = await mcpInitRes.text();
+  let mcpInit: unknown;
+  try { mcpInit = JSON.parse(mcpInitRaw); } catch { mcpInit = mcpInitRaw.slice(0, 500); }
 
   return NextResponse.json({
     "platform — /nano_banana_pro":           platformResults[0],
@@ -69,7 +86,7 @@ export async function GET() {
     "platform — /api/v1/generate":           platformResults[5],
     "platform — /generate":                  platformResults[6],
     "platform — /images/generate":           platformResults[7],
-    "mcp — Key auth":                        mcpKey,
-    "mcp — Bearer auth":                     mcpBearer,
+    "mcp — Bearer + correct Accept (preflight cost)": mcpFixed,
+    "mcp — initialize":                      { status: mcpInitRes.status, data: mcpInit },
   });
 }
