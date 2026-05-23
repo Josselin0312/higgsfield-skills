@@ -49,6 +49,8 @@ async function submitViaAnthropicMCP(params: GenParams): Promise<string> {
     betas: ["mcp-client-2025-04-04"],
   });
 
+  console.log("[generate-image] response content:", JSON.stringify(response.content, null, 2));
+
   const text = (response.content ?? [])
     .filter(b => b.type === "text")
     .map(b => b.text ?? "")
