@@ -23,7 +23,7 @@ export async function submitGeneration(params: {
   resolution: string;
   medias?: Array<{ role: string; value: string }>;
 }): Promise<string> {
-  const res = await fetch(`${BASE}/nano_banana_pro`, {
+  const res = await fetch(`${BASE}/nano_banana_2`, {
     method: "POST",
     headers: { Authorization: auth(), "Content-Type": "application/json" },
     body: JSON.stringify(params),
