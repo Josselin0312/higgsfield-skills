@@ -3,37 +3,17 @@ import { NextResponse } from "next/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-const CLERK_CLIENT = process.env.HIGGSFIELD_CLERK_CLIENT ?? "";
-const SESSION_ID   = process.env.HIGGSFIELD_SESSION_ID ?? "";
+const BASE = "https://platform.higgsfield.ai";
 
-async function getFreshJWT(): Promise<string> {
-  const res = await fetch(
-    `https://clerk.higgsfield.ai/v1/client/sessions/${SESSION_ID}/tokens`,
-    {
-      method: "POST",
-      headers: {
-        "Cookie": `__client=${CLERK_CLIENT}`,
-        "Origin": "https://higgsfield.ai",
-        "Referer": "https://higgsfield.ai/",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    }
-  );
-  const data = await res.json() as Record<string, unknown>;
-  if (!data.jwt) throw new Error(`No JWT: ${JSON.stringify(data).slice(0, 200)}`);
-  return data.jwt as string;
+function auth() {
+  return `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
 }
 
-async function fnf(jwt: string, path: string, body?: unknown) {
-  const res = await fetch(`https://fnf.higgsfield.ai${path}`, {
-    method: body !== undefined ? "POST" : "GET",
-    headers: {
-      "Authorization": `Bearer ${jwt}`,
-      "Content-Type": "application/json",
-      "Origin": "https://higgsfield.ai",
-      "Referer": "https://higgsfield.ai/",
-    },
-    ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+async function tryPost(path: string, body: unknown) {
+  const res = await fetch(`${BASE}${path}`, {
+    method: "POST",
+    headers: { Authorization: auth(), "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
   let data: unknown;
   try { data = await res.json(); } catch { data = await res.text(); }
@@ -41,23 +21,31 @@ async function fnf(jwt: string, path: string, body?: unknown) {
 }
 
 export async function GET() {
-  const jwt = await getFreshJWT();
-  const prompt = "a woman walking in Paris";
-  const body = { model: "nano_banana_pro", prompt, aspect_ratio: "1:1" };
+  const prompt = "a red apple";
+  const base = { prompt, aspect_ratio: "1:1", resolution: "1k" };
+  const withModel = { ...base, model: "nano_banana_pro" };
 
-  const [a, b, c, d, e] = await Promise.all([
-    fnf(jwt, "/generate"),
-    fnf(jwt, "/v1/generate"),
-    fnf(jwt, "/generate/image", body),
-    fnf(jwt, "/v1/images/generate", body),
-    fnf(jwt, "/v2/generate/image", body),
+  const results = await Promise.all([
+    tryPost("/nano_banana_pro",              base),
+    tryPost("/nano_banana_2",               base),
+    tryPost("/nano-banana-pro",             base),
+    tryPost("/nano-banana-pro/text-to-image", base),
+    tryPost("/nano-banana/pro/text-to-image", base),
+    tryPost("/generate",                    withModel),
+    tryPost("/generate/image",              withModel),
+    tryPost("/v1/generate",                 withModel),
+    tryPost("/v1/images/generate",          withModel),
   ]);
 
   return NextResponse.json({
-    "/generate GET": a,
-    "/v1/generate GET": b,
-    "/generate/image POST": c,
-    "/v1/images/generate POST": d,
-    "/v2/generate/image POST": e,
+    "/nano_banana_pro":                results[0],
+    "/nano_banana_2":                  results[1],
+    "/nano-banana-pro":                results[2],
+    "/nano-banana-pro/text-to-image":  results[3],
+    "/nano-banana/pro/text-to-image":  results[4],
+    "/generate (model in body)":       results[5],
+    "/generate/image (model in body)": results[6],
+    "/v1/generate (model in body)":    results[7],
+    "/v1/images/generate (model in body)": results[8],
   });
 }
