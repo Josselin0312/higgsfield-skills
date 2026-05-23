@@ -26,26 +26,26 @@ export async function GET() {
   const withModel = { ...base, model: "nano_banana_pro" };
 
   const results = await Promise.all([
-    tryPost("/nano_banana_pro",              base),
-    tryPost("/nano_banana_2",               base),
-    tryPost("/nano-banana-pro",             base),
-    tryPost("/nano-banana-pro/text-to-image", base),
-    tryPost("/nano-banana/pro/text-to-image", base),
-    tryPost("/generate",                    withModel),
-    tryPost("/generate/image",              withModel),
-    tryPost("/v1/generate",                 withModel),
-    tryPost("/v1/images/generate",          withModel),
+    tryPost("/requests",               withModel),
+    tryPost("/v1/requests",            withModel),
+    tryPost("/image/generate",         withModel),
+    tryPost("/api/generate",           withModel),
+    tryPost("/v2/generate",            withModel),
+    tryPost("/v1/image/generate",      withModel),
+    tryPost("/jobs",                   withModel),
+    tryPost("/v1/jobs",                withModel),
+    tryPost("/submit",                 withModel),
   ]);
 
   return NextResponse.json({
-    "/nano_banana_pro":                results[0],
-    "/nano_banana_2":                  results[1],
-    "/nano-banana-pro":                results[2],
-    "/nano-banana-pro/text-to-image":  results[3],
-    "/nano-banana/pro/text-to-image":  results[4],
-    "/generate (model in body)":       results[5],
-    "/generate/image (model in body)": results[6],
-    "/v1/generate (model in body)":    results[7],
-    "/v1/images/generate (model in body)": results[8],
+    "/requests":          results[0],
+    "/v1/requests":       results[1],
+    "/image/generate":    results[2],
+    "/api/generate":      results[3],
+    "/v2/generate":       results[4],
+    "/v1/image/generate": results[5],
+    "/jobs":              results[6],
+    "/v1/jobs":           results[7],
+    "/submit":            results[8],
   });
 }
