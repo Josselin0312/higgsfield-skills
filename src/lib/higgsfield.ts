@@ -18,15 +18,17 @@ export async function getUploadUrl(contentType: string): Promise<{ upload_url: s
 }
 
 export async function submitGeneration(params: {
+  model?: string;
   prompt: string;
   aspect_ratio: string;
   resolution: string;
   medias?: Array<{ role: string; value: string }>;
 }): Promise<string> {
-  const res = await fetch(`${BASE}/nano_banana_2`, {
+  const { model = "nano_banana_pro", ...rest } = params;
+  const res = await fetch(`${BASE}/${model}`, {
     method: "POST",
     headers: { Authorization: auth(), "Content-Type": "application/json" },
-    body: JSON.stringify(params),
+    body: JSON.stringify(rest),
   });
   if (!res.ok) throw new Error(`Higgsfield generate: ${res.status} — ${await res.text()}`);
   const data = await res.json() as { request_id?: string };

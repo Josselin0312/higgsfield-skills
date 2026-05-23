@@ -1,10 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import Anthropic from "@anthropic-ai/sdk";
+import { submitGeneration } from "@/lib/higgsfield";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
-
-const client = new Anthropic({ apiKey: process.env.ANTHROPIC_API_KEY });
+export const maxDuration = 30;
 
 const ASPECT_RATIO: Record<string, string> = {
   "1024x1024": "1:1",
@@ -21,65 +19,6 @@ const MODEL_MAP: Record<string, string> = {
   "Marketing Studio": "marketing_studio_image",
 };
 
-interface GenParams {
-  model: string;
-  prompt: string;
-  aspect_ratio: string;
-  quality: string;
-  medias?: Array<{ role: string; value: string }>;
-}
-
-async function submitViaAnthropicMCP(params: GenParams): Promise<string> {
-  const toolInput = { params };
-
-  const response = await (client.beta.messages as Record<string, unknown> & {
-    create: (opts: unknown) => Promise<{ content: Array<{ type: string; text?: string; content?: unknown }>; stop_reason: string }>;
-  }).create({
-    model: "claude-haiku-4-5-20251001",
-    max_tokens: 2048,
-    mcp_servers: [{
-      type: "url",
-      url: "https://mcp.higgsfield.ai/mcp",
-      name: "higgsfield",
-      authorization_token: `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`,
-    }],
-    system: "You are a tool executor. The user provides JSON input for generate_image. You MUST call generate_image with that EXACT input. Then output ONLY: {\"job_id\":\"<id>\"}",
-    messages: [{
-      role: "user",
-      content: `Call generate_image with this input: ${JSON.stringify(toolInput)}`,
-    }],
-    betas: ["mcp-client-2025-04-04"],
-  });
-
-  console.log("[generate-image] stop_reason:", response.stop_reason);
-  console.log("[generate-image] response content:", JSON.stringify(response.content, null, 2));
-
-  // Extract from mcp_tool_result if present
-  for (const block of response.content ?? []) {
-    if (block.type === "mcp_tool_result") {
-      const raw = typeof block.content === "string" ? block.content : JSON.stringify(block.content);
-      const m = raw.match(/"?job_id"?\s*:?\s*"([a-zA-Z0-9_\-]+)"/);
-      if (m?.[1]) return m[1];
-    }
-  }
-
-  const text = (response.content ?? [])
-    .filter(b => b.type === "text")
-    .map(b => b.text ?? "")
-    .join("")
-    .trim();
-
-  try {
-    const parsed = JSON.parse(text) as { job_id?: string };
-    if (parsed.job_id) return parsed.job_id;
-  } catch { /* not JSON */ }
-
-  const m = text.match(/"?job_id"?\s*:?\s*"([a-zA-Z0-9_\-]+)"/);
-  if (m?.[1]) return m[1];
-
-  throw new Error(`Pas de job_id dans la réponse Anthropic: ${text.slice(0, 300)}`);
-}
-
 async function handleGenerate(
   prompt: string,
   model: string,
@@ -92,12 +31,11 @@ async function handleGenerate(
     return NextResponse.json({ error: "Prompt requis" }, { status: 400 });
   }
 
-  const higgsModel = MODEL_MAP[model] ?? "nano_banana_pro";
-  const params: GenParams = {
-    model: higgsModel,
+  const params = {
+    model: MODEL_MAP[model] ?? "nano_banana_pro",
     prompt: prompt.trim(),
     aspect_ratio: ASPECT_RATIO[resolution] ?? "1:1",
-    quality: quality === "4K" ? "4k" : quality === "2K" ? "2k" : "1k",
+    resolution: quality === "4K" ? "4k" : quality === "2K" ? "2k" : "1k",
     ...(inputImages.length > 0 ? {
       medias: inputImages.map(img => ({ role: "image", value: img.url })),
     } : {}),
@@ -105,7 +43,7 @@ async function handleGenerate(
 
   const actualCount = Math.min(Math.max(1, count ?? 1), 4);
   const settled = await Promise.allSettled(
-    Array.from({ length: actualCount }, () => submitViaAnthropicMCP(params))
+    Array.from({ length: actualCount }, () => submitGeneration(params))
   );
 
   const jobIds = settled
