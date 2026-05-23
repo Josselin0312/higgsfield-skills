@@ -25,6 +25,30 @@ export async function GET() {
   const base = { prompt, aspect_ratio: "1:1", resolution: "1k" };
   const withModel = { ...base, model: "nano_banana_pro" };
 
+  // Test Higgsfield MCP server directly with Key auth
+  async function tryMcp(authHeader: string) {
+    const res = await fetch("https://mcp.higgsfield.ai/mcp", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "Authorization": authHeader,
+      },
+      body: JSON.stringify({
+        jsonrpc: "2.0", method: "tools/call", id: 1,
+        params: {
+          name: "generate_image",
+          arguments: { params: { model: "nano_banana_pro", prompt: "a red apple", aspect_ratio: "1:1", resolution: "1k" } }
+        }
+      }),
+    });
+    let data: unknown;
+    try { data = await res.json(); } catch { data = await res.text(); }
+    return { status: res.status, data };
+  }
+
+  const mcpKey  = await tryMcp(auth());
+  const mcpBearer = await tryMcp(`Bearer ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`);
+
   // Get Clerk JWT for fnf.higgsfield.ai
   const clerkClient = process.env.HIGGSFIELD_CLERK_CLIENT ?? "";
   const sessionId   = process.env.HIGGSFIELD_SESSION_ID ?? "";
