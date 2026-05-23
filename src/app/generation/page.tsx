@@ -280,7 +280,7 @@ export default function GenerationPage() {
         count: row.count,
         inputImages,
       });
-      const res = await fetch(`/api/image-generate?body=${encodeURIComponent(body)}`);
+      const res = await fetch(`/api/generate-image?body=${encodeURIComponent(body)}`);
       const data = await res.json();
       if (!res.ok) throw new Error(data.error ?? "Erreur soumission");
       const jobIds: string[] = data.jobIds ?? [];
