@@ -21,7 +21,7 @@ const RESOLUTIONS = [
 ];
 
 const QUALITIES = ["1K", "2K", "4K"];
-const MODELS = ["NanobananaPRO"];
+const MODELS = ["NanobananaPRO", "Soul 2", "Marketing Studio"];
 
 const DEFAULT_RESOLUTION: Record<GenSection, string> = {
   feed: "1080x1350",
@@ -274,6 +274,7 @@ export default function GenerationPage() {
       // Submit jobs via GET (works through all proxies) — fast (~3s), returns job IDs
       const body = JSON.stringify({
         prompt: row.prompt,
+        model: row.model,
         resolution: row.resolution,
         quality: row.quality,
         count: row.count,
