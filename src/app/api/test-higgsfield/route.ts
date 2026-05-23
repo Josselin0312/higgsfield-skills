@@ -61,32 +61,31 @@ export async function GET() {
 
   const bearer = `Bearer ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
 
-  // Test MCP endpoint — Bearer with correct Accept header
-  const mcpFixed   = await tryMcp(bearer);
-  // Also try MCP initialize to discover server (cheaper)
-  const mcpInitRes = await fetch("https://mcp.higgsfield.ai/mcp", {
+  // Real generation via MCP — to see exact response structure (costs ~2 credits)
+  const mcpGenRes = await fetch("https://mcp.higgsfield.ai/mcp", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
       "Authorization": bearer,
       "Accept": "application/json, text/event-stream",
     },
-    body: JSON.stringify({ jsonrpc: "2.0", method: "initialize", id: 0, params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } } }),
+    body: JSON.stringify({
+      jsonrpc: "2.0", method: "tools/call", id: 1,
+      params: {
+        name: "generate_image",
+        arguments: { params: { model: "nano_banana_pro", prompt: "a red apple", aspect_ratio: "1:1", resolution: "1k" } }
+      }
+    }),
   });
-  const mcpInitRaw = await mcpInitRes.text();
-  let mcpInit: unknown;
-  try { mcpInit = JSON.parse(mcpInitRaw); } catch { mcpInit = mcpInitRaw.slice(0, 500); }
+  const mcpGenRaw = await mcpGenRes.text();
+  let mcpGen: unknown;
+  try {
+    // Parse SSE: find all data: lines
+    const lines = mcpGenRaw.split('\n').filter(l => l.startsWith('data: '));
+    mcpGen = lines.map(l => { try { return JSON.parse(l.slice(6)); } catch { return l; } });
+  } catch { mcpGen = mcpGenRaw.slice(0, 1000); }
 
   return NextResponse.json({
-    "platform — /nano_banana_pro":           platformResults[0],
-    "platform — /nano_banana_2":             platformResults[1],
-    "platform — /v1/nano_banana_pro":        platformResults[2],
-    "platform — /v1/image/generate":         platformResults[3],
-    "platform — /v1/generate":               platformResults[4],
-    "platform — /api/v1/generate":           platformResults[5],
-    "platform — /generate":                  platformResults[6],
-    "platform — /images/generate":           platformResults[7],
-    "mcp — Bearer + correct Accept (preflight cost)": mcpFixed,
-    "mcp — initialize":                      { status: mcpInitRes.status, data: mcpInit },
+    "mcp — real generate (raw SSE)": { status: mcpGenRes.status, lines: mcpGen },
   });
 }
