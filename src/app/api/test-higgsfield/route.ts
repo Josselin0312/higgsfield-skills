@@ -61,31 +61,26 @@ export async function GET() {
 
   const bearer = `Bearer ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
 
-  // Real generation via MCP — to see exact response structure (costs ~2 credits)
-  const mcpGenRes = await fetch("https://mcp.higgsfield.ai/mcp", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": bearer,
-      "Accept": "application/json, text/event-stream",
-    },
-    body: JSON.stringify({
-      jsonrpc: "2.0", method: "tools/call", id: 1,
-      params: {
-        name: "generate_image",
-        arguments: { params: { model: "nano_banana_pro", prompt: "a red apple", aspect_ratio: "1:1", resolution: "1k" } }
-      }
-    }),
-  });
-  const mcpGenRaw = await mcpGenRes.text();
-  let mcpGen: unknown;
-  try {
-    // Parse SSE: find all data: lines
-    const lines = mcpGenRaw.split('\n').filter(l => l.startsWith('data: '));
-    mcpGen = lines.map(l => { try { return JSON.parse(l.slice(6)); } catch { return l; } });
-  } catch { mcpGen = mcpGenRaw.slice(0, 1000); }
+  // Test provider-prefixed paths (pattern: {provider}/{model}/{task})
+  const providerResults = await Promise.all([
+    tryPost("/google/nano_banana_pro", body),
+    tryPost("/google/nano_banana_pro/text-to-image", body),
+    tryPost("/nano_banana_pro/text-to-image", body),
+    tryPost("/nano-banana-pro", body),
+    tryPost("/nano-banana-pro/text-to-image", body),
+    tryPost("/nano_banana_2/text-to-image", body),
+    tryPost("/bytedance/seedream/v4/text-to-image", { ...body, model: "bytedance/seedream/v4/text-to-image" }),
+    tryPost("/reve/text-to-image", body),
+  ]);
 
   return NextResponse.json({
-    "mcp — real generate (raw SSE)": { status: mcpGenRes.status, lines: mcpGen },
+    "google/nano_banana_pro":                  providerResults[0],
+    "google/nano_banana_pro/text-to-image":    providerResults[1],
+    "nano_banana_pro/text-to-image":           providerResults[2],
+    "nano-banana-pro":                         providerResults[3],
+    "nano-banana-pro/text-to-image":           providerResults[4],
+    "nano_banana_2/text-to-image":             providerResults[5],
+    "bytedance/seedream/v4/text-to-image":     providerResults[6],
+    "reve/text-to-image":                      providerResults[7],
   });
 }
