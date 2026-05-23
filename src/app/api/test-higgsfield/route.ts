@@ -25,27 +25,33 @@ export async function GET() {
   const base = { prompt, aspect_ratio: "1:1", resolution: "1k" };
   const withModel = { ...base, model: "nano_banana_pro" };
 
-  const results = await Promise.all([
-    tryPost("/requests",               withModel),
-    tryPost("/v1/requests",            withModel),
-    tryPost("/image/generate",         withModel),
-    tryPost("/api/generate",           withModel),
-    tryPost("/v2/generate",            withModel),
-    tryPost("/v1/image/generate",      withModel),
-    tryPost("/jobs",                   withModel),
-    tryPost("/v1/jobs",                withModel),
-    tryPost("/submit",                 withModel),
+  // Test 1: third-party model path (known to work per SDK docs)
+  const thirdParty = await tryPost("/bytedance/seedream/v4/text-to-image", {
+    prompt, aspect_ratio: "1:1",
+  });
+
+  // Test 2: fnf.higgsfield.ai with Key auth
+  async function tryFnf(path: string, body: unknown) {
+    const res = await fetch(`https://fnf.higgsfield.ai${path}`, {
+      method: "POST",
+      headers: { Authorization: auth(), "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    let data: unknown;
+    try { data = await res.json(); } catch { data = await res.text(); }
+    return { status: res.status, data };
+  }
+
+  const fnfResults = await Promise.all([
+    tryFnf("/generate/image", withModel),
+    tryFnf("/v1/images/generate", withModel),
+    tryFnf("/generate", withModel),
   ]);
 
   return NextResponse.json({
-    "/requests":          results[0],
-    "/v1/requests":       results[1],
-    "/image/generate":    results[2],
-    "/api/generate":      results[3],
-    "/v2/generate":       results[4],
-    "/v1/image/generate": results[5],
-    "/jobs":              results[6],
-    "/v1/jobs":           results[7],
-    "/submit":            results[8],
+    "platform — /bytedance/seedream/v4/text-to-image": thirdParty,
+    "fnf — /generate/image": fnfResults[0],
+    "fnf — /v1/images/generate": fnfResults[1],
+    "fnf — /generate": fnfResults[2],
   });
 }
