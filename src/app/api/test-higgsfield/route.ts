@@ -1,91 +1,63 @@
 import { NextResponse } from "next/server";
 
 export const runtime = "nodejs";
-export const maxDuration = 60;
+export const maxDuration = 30;
 
-async function getClerkJwt(): Promise<string> {
-  const clerkClient = process.env.HIGGSFIELD_CLERK_CLIENT ?? "";
-  const sessionId   = process.env.HIGGSFIELD_SESSION_ID ?? "";
-  const res = await fetch(
-    `https://clerk.higgsfield.ai/v1/client/sessions/${sessionId}/tokens`,
-    {
-      method: "POST",
-      headers: {
-        "Cookie": `__client=${clerkClient}`,
-        "Origin": "https://higgsfield.ai",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    }
-  );
-  const data = await res.json() as Record<string, unknown>;
-  return (data.jwt as string) ?? "";
+const BASE = "https://platform.higgsfield.ai";
+
+function keyAuth() {
+  return `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
 }
 
-async function mcpPost(bearer: string, body: unknown, sessionId?: string) {
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-    "Authorization": bearer,
-    "Accept": "application/json, text/event-stream",
-  };
-  if (sessionId) headers["Mcp-Session-Id"] = sessionId;
+async function tryGet(path: string) {
+  const res = await fetch(`${BASE}${path}`, {
+    headers: { Authorization: keyAuth() },
+  });
+  let data: unknown;
+  try { data = await res.json(); } catch { data = await res.text(); }
+  return { status: res.status, data };
+}
 
-  const res = await fetch("https://mcp.higgsfield.ai/mcp", {
+async function tryPost(path: string, body: unknown) {
+  const res = await fetch(`${BASE}${path}`, {
     method: "POST",
-    headers,
+    headers: { Authorization: keyAuth(), "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
-
-  // Capture session ID from response headers
-  const respSessionId = res.headers.get("Mcp-Session-Id") ?? res.headers.get("mcp-session-id") ?? "";
-
-  const raw = await res.text();
-  const lines = raw.split('\n').filter(l => l.startsWith('data: '));
-  const parsed = lines.map(l => { try { return JSON.parse(l.slice(6)); } catch { return l; } });
-
-  return {
-    status: res.status,
-    sessionId: respSessionId,
-    data: parsed.length ? parsed : raw.slice(0, 500),
-    allHeaders: Object.fromEntries(res.headers.entries()),
-  };
+  let data: unknown;
+  try { data = await res.json(); } catch { data = await res.text(); }
+  return { status: res.status, data };
 }
 
 export async function GET() {
-  const jwt = await getClerkJwt();
-  if (!jwt) return NextResponse.json({ error: "JWT failed" });
+  const body = { prompt: "a red apple", aspect_ratio: "1:1", resolution: "1k" };
 
-  const bearer = `Bearer ${jwt}`;
-
-  // Step 1: Initialize — capture session ID from response headers
-  const initResult = await mcpPost(bearer, {
-    jsonrpc: "2.0", method: "initialize", id: 0,
-    params: { protocolVersion: "2024-11-05", capabilities: {}, clientInfo: { name: "test", version: "1" } }
-  });
-
-  const mcpSessionId = initResult.sessionId;
-
-  // Step 2: tools/call with session ID
-  const genResult = await mcpPost(bearer, {
-    jsonrpc: "2.0", method: "tools/call", id: 1,
-    params: {
-      name: "generate_image",
-      arguments: {
-        params: {
-          model: "nano_banana_pro",
-          prompt: "a red apple on a white table",
-          aspect_ratio: "1:1",
-          resolution: "1k",
-        }
-      }
-    }
-  }, mcpSessionId || undefined);
+  const results = await Promise.all([
+    // Discover available models / routes
+    tryGet("/models"),
+    tryGet("/v1/models"),
+    tryGet("/api/models"),
+    tryGet("/"),
+    tryGet("/v1"),
+    // Known model paths
+    tryPost("/higgsfield/nano_banana_pro", body),
+    tryPost("/higgsfield-ai/nano_banana_pro", body),
+    tryPost("/nano_banana_pro/v1/text-to-image", body),
+    // Try reve with more credits context
+    tryPost("/reve/text-to-image", body),
+    tryPost("/reve", body),
+  ]);
 
   return NextResponse.json({
-    "step1_init_status": initResult.status,
-    "step1_session_id_header": mcpSessionId || "(none)",
-    "step1_all_headers": initResult.allHeaders,
-    "step2_generate_status": genResult.status,
-    "step2_session_id_used": mcpSessionId || "(none)",
-    "step2_data": genResult.data,
+    "GET /models":                          results[0],
+    "GET /v1/models":                       results[1],
+    "GET /api/models":                      results[2],
+    "GET /":                                results[3],
+    "GET /v1":                              results[4],
+    "POST /higgsfield/nano_banana_pro":     results[5],
+    "POST /higgsfield-ai/nano_banana_pro":  results[6],
+    "POST /nano_banana_pro/v1/text-to-image": results[7],
+    "POST /reve/text-to-image":             results[8],
+    "POST /reve":                           results[9],
   });
 }
