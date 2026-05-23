@@ -25,16 +25,43 @@ export async function GET() {
   const base = { prompt, aspect_ratio: "1:1", resolution: "1k" };
   const withModel = { ...base, model: "nano_banana_pro" };
 
-  // Test 1: third-party model path (known to work per SDK docs)
-  const thirdParty = await tryPost("/bytedance/seedream/v4/text-to-image", {
-    prompt, aspect_ratio: "1:1",
-  });
+  // Get Clerk JWT for fnf.higgsfield.ai
+  const clerkClient = process.env.HIGGSFIELD_CLERK_CLIENT ?? "";
+  const sessionId   = process.env.HIGGSFIELD_SESSION_ID ?? "";
 
-  // Test 2: fnf.higgsfield.ai with Key auth
-  async function tryFnf(path: string, body: unknown) {
+  let jwt = "";
+  let jwtError = "";
+  try {
+    const clerkRes = await fetch(
+      `https://clerk.higgsfield.ai/v1/client/sessions/${sessionId}/tokens`,
+      {
+        method: "POST",
+        headers: {
+          "Cookie": `__client=${clerkClient}`,
+          "Origin": "https://higgsfield.ai",
+          "Referer": "https://higgsfield.ai/",
+          "Content-Type": "application/x-www-form-urlencoded",
+        },
+      }
+    );
+    const clerkData = await clerkRes.json() as Record<string, unknown>;
+    jwt = (clerkData.jwt as string) ?? "";
+    if (!jwt) jwtError = JSON.stringify(clerkData).slice(0, 200);
+  } catch (e) {
+    jwtError = String(e);
+  }
+
+  if (!jwt) return NextResponse.json({ error: "JWT failed", detail: jwtError });
+
+  async function tryFnfJwt(path: string, body: unknown) {
     const res = await fetch(`https://fnf.higgsfield.ai${path}`, {
       method: "POST",
-      headers: { Authorization: auth(), "Content-Type": "application/json" },
+      headers: {
+        Authorization: `Bearer ${jwt}`,
+        "Content-Type": "application/json",
+        "Origin": "https://higgsfield.ai",
+        "Referer": "https://higgsfield.ai/",
+      },
       body: JSON.stringify(body),
     });
     let data: unknown;
@@ -43,15 +70,14 @@ export async function GET() {
   }
 
   const fnfResults = await Promise.all([
-    tryFnf("/generate/image", withModel),
-    tryFnf("/v1/images/generate", withModel),
-    tryFnf("/generate", withModel),
+    tryFnfJwt("/generate/image", withModel),
+    tryFnfJwt("/v1/images/generate", withModel),
+    tryFnfJwt("/v2/generate/image", withModel),
   ]);
 
   return NextResponse.json({
-    "platform — /bytedance/seedream/v4/text-to-image": thirdParty,
-    "fnf — /generate/image": fnfResults[0],
-    "fnf — /v1/images/generate": fnfResults[1],
-    "fnf — /generate": fnfResults[2],
+    "fnf+JWT — /generate/image":       fnfResults[0],
+    "fnf+JWT — /v1/images/generate":   fnfResults[1],
+    "fnf+JWT — /v2/generate/image":    fnfResults[2],
   });
 }
