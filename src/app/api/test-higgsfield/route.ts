@@ -4,15 +4,13 @@ export const runtime = "nodejs";
 export const maxDuration = 30;
 
 const BASE = "https://platform.higgsfield.ai";
+const id  = () => process.env.HIGGSFIELD_KEY_ID  ?? "";
+const sec = () => process.env.HIGGSFIELD_KEY_SECRET ?? "";
 
-function keyAuth() {
-  return `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`;
-}
-
-async function tryPost(url: string, body: unknown, auth: string) {
+async function tryPost(url: string, body: unknown, headers: Record<string, string>) {
   const res = await fetch(url, {
     method: "POST",
-    headers: { Authorization: auth, "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...headers },
     body: JSON.stringify(body),
   });
   let data: unknown;
@@ -20,51 +18,34 @@ async function tryPost(url: string, body: unknown, auth: string) {
   return { status: res.status, data };
 }
 
-async function getClerkJwt(): Promise<string> {
-  const res = await fetch(
-    `https://clerk.higgsfield.ai/v1/client/sessions/${process.env.HIGGSFIELD_SESSION_ID}/tokens`,
-    {
-      method: "POST",
-      headers: {
-        "Cookie": `__client=${process.env.HIGGSFIELD_CLERK_CLIENT}`,
-        "Origin": "https://higgsfield.ai",
-        "Content-Type": "application/x-www-form-urlencoded",
-      },
-    }
-  );
-  const data = await res.json() as Record<string, unknown>;
-  return (data.jwt as string) ?? "";
-}
-
 export async function GET() {
-  const jwt = await getClerkJwt();
-  const bearerJwt = `Bearer ${jwt}`;
-  const keyHeader = keyAuth();
   const body = { prompt: "a red apple", aspect_ratio: "1:1", resolution: "1k" };
 
+  // SDK v1 uses custom headers: hf-api-key + hf-secret
+  const hfHeaders = { "hf-api-key": id(), "hf-secret": sec() };
+  // SDK v2 uses Authorization: Key id:secret
+  const keyHeaders = { "Authorization": `Key ${id()}:${sec()}` };
+
   const results = await Promise.all([
-    // Balance endpoints — POST since GET returned 405
-    tryPost(`${BASE}/balance`, {}, keyHeader),
-    tryPost(`${BASE}/v1/balance`, {}, keyHeader),
-    tryPost(`${BASE}/credits`, {}, keyHeader),
-    // fnf.higgsfield.ai with JWT — try correct nano_banana paths
-    tryPost("https://fnf.higgsfield.ai/nano_banana_pro", body, bearerJwt),
-    tryPost("https://fnf.higgsfield.ai/google/nano_banana_pro", body, bearerJwt),
-    tryPost("https://fnf.higgsfield.ai/reve/text-to-image", body, bearerJwt),
-    // platform with JWT (test different paths)
-    tryPost(`${BASE}/reve/text-to-image`, body, bearerJwt),
-    tryPost(`${BASE}/nano_banana_pro`, body, bearerJwt),
+    tryPost(`${BASE}/nano_banana_pro`,              body, hfHeaders),
+    tryPost(`${BASE}/nano_banana_2`,                body, hfHeaders),
+    tryPost(`${BASE}/reve/text-to-image`,           body, hfHeaders),
+    tryPost(`${BASE}/google/nano_banana_pro`,       body, hfHeaders),
+    tryPost(`${BASE}/nano_banana_pro`,              body, keyHeaders),
+    // Also try v1 endpoint paths with both auth formats
+    tryPost(`${BASE}/v1/text2image/nano_banana_pro`, body, hfHeaders),
+    tryPost(`${BASE}/v1/text2image/nano_banana_pro`, body, keyHeaders),
+    // Check requests status endpoint to confirm polling still works
+    { status: "skipped", data: "placeholder" },
   ]);
 
   return NextResponse.json({
-    "jwt_ok": !!jwt,
-    "POST platform/balance (key)":            results[0],
-    "POST platform/v1/balance (key)":          results[1],
-    "POST platform/credits (key)":             results[2],
-    "POST fnf/nano_banana_pro (jwt)":          results[3],
-    "POST fnf/google/nano_banana_pro (jwt)":   results[4],
-    "POST fnf/reve/text-to-image (jwt)":       results[5],
-    "POST platform/reve/text-to-image (jwt)":  results[6],
-    "POST platform/nano_banana_pro (jwt)":     results[7],
+    "hf-headers /nano_banana_pro":           results[0],
+    "hf-headers /nano_banana_2":             results[1],
+    "hf-headers /reve/text-to-image":        results[2],
+    "hf-headers /google/nano_banana_pro":    results[3],
+    "Key-auth  /nano_banana_pro (baseline)": results[4],
+    "hf-headers /v1/text2image/nano_banana_pro": results[5],
+    "Key-auth  /v1/text2image/nano_banana_pro":  results[6],
   });
 }
