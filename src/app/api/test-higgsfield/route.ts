@@ -20,107 +20,56 @@ async function tryPost(path: string, body: unknown) {
   return { status: res.status, data };
 }
 
+async function tryMcp(authHeader: string) {
+  const res = await fetch("https://mcp.higgsfield.ai/mcp", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      "Authorization": authHeader,
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0", method: "tools/call", id: 1,
+      params: {
+        name: "generate_image",
+        arguments: { params: { model: "nano_banana_pro", prompt: "a red apple", aspect_ratio: "1:1", resolution: "1k" } }
+      }
+    }),
+  });
+  let data: unknown;
+  try { data = await res.json(); } catch { data = await res.text(); }
+  return { status: res.status, data };
+}
+
 export async function GET() {
   const prompt = "a red apple";
-  const base = { prompt, aspect_ratio: "1:1", resolution: "1k" };
-  const withModel = { ...base, model: "nano_banana_pro" };
+  const body = { prompt, aspect_ratio: "1:1", resolution: "1k" };
 
-  // Test Higgsfield MCP server directly with Key auth
-  async function tryMcp(authHeader: string) {
-    const res = await fetch("https://mcp.higgsfield.ai/mcp", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        "Authorization": authHeader,
-      },
-      body: JSON.stringify({
-        jsonrpc: "2.0", method: "tools/call", id: 1,
-        params: {
-          name: "generate_image",
-          arguments: { params: { model: "nano_banana_pro", prompt: "a red apple", aspect_ratio: "1:1", resolution: "1k" } }
-        }
-      }),
-    });
-    let data: unknown;
-    try { data = await res.json(); } catch { data = await res.text(); }
-    return { status: res.status, data };
-  }
-
-  const mcpKey  = await tryMcp(auth());
-  const mcpBearer = await tryMcp(`Bearer ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`);
-
-  // Get Clerk JWT for fnf.higgsfield.ai
-  const clerkClient = process.env.HIGGSFIELD_CLERK_CLIENT ?? "";
-  const sessionId   = process.env.HIGGSFIELD_SESSION_ID ?? "";
-
-  let jwt = "";
-  let jwtError = "";
-  try {
-    const clerkRes = await fetch(
-      `https://clerk.higgsfield.ai/v1/client/sessions/${sessionId}/tokens`,
-      {
-        method: "POST",
-        headers: {
-          "Cookie": `__client=${clerkClient}`,
-          "Origin": "https://higgsfield.ai",
-          "Referer": "https://higgsfield.ai/",
-          "Content-Type": "application/x-www-form-urlencoded",
-        },
-      }
-    );
-    const clerkData = await clerkRes.json() as Record<string, unknown>;
-    jwt = (clerkData.jwt as string) ?? "";
-    if (!jwt) jwtError = JSON.stringify(clerkData).slice(0, 200);
-  } catch (e) {
-    jwtError = String(e);
-  }
-
-  if (!jwt) return NextResponse.json({ error: "JWT failed", detail: jwtError });
-
-  async function tryFnfJwt(path: string, body: unknown) {
-    const res = await fetch(`https://fnf.higgsfield.ai${path}`, {
-      method: "POST",
-      headers: {
-        Authorization: `Bearer ${jwt}`,
-        "Content-Type": "application/json",
-        "Origin": "https://higgsfield.ai",
-        "Referer": "https://higgsfield.ai/",
-      },
-      body: JSON.stringify(body),
-    });
-    let data: unknown;
-    try { data = await res.json(); } catch { data = await res.text(); }
-    return { status: res.status, data };
-  }
-
-  // Also try GET on root to discover API structure
-  const rootRes = await fetch("https://fnf.higgsfield.ai/", {
-    headers: { Authorization: `Bearer ${jwt}`, "Origin": "https://higgsfield.ai" },
-  });
-  const rootData = await rootRes.text().then(t => { try { return JSON.parse(t); } catch { return t.slice(0,300); } });
-
-  const fnfResults = await Promise.all([
-    tryFnfJwt("/nano_banana_pro", base),
-    tryFnfJwt("/nano_banana_2", base),
-    tryFnfJwt("/image", withModel),
-    tryFnfJwt("/images", withModel),
-    tryFnfJwt("/text-to-image", withModel),
-    tryFnfJwt("/infer", withModel),
-    tryFnfJwt("/inference", withModel),
-    tryFnfJwt("/run", withModel),
-    tryFnfJwt("/predict", withModel),
+  // Test platform.higgsfield.ai REST paths
+  const platformResults = await Promise.all([
+    tryPost("/nano_banana_pro", body),
+    tryPost("/nano_banana_2", body),
+    tryPost("/v1/nano_banana_pro", body),
+    tryPost("/v1/image/generate", { ...body, model: "nano_banana_pro" }),
+    tryPost("/v1/generate", { ...body, model: "nano_banana_pro" }),
+    tryPost("/api/v1/generate", { ...body, model: "nano_banana_pro" }),
+    tryPost("/generate", { ...body, model: "nano_banana_pro" }),
+    tryPost("/images/generate", { ...body, model: "nano_banana_pro" }),
   ]);
 
+  // Test MCP endpoint directly
+  const mcpKey    = await tryMcp(auth());
+  const mcpBearer = await tryMcp(`Bearer ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`);
+
   return NextResponse.json({
-    "fnf GET /": { status: rootRes.status, data: rootData },
-    "fnf — /nano_banana_pro":   fnfResults[0],
-    "fnf — /nano_banana_2":     fnfResults[1],
-    "fnf — /image":             fnfResults[2],
-    "fnf — /images":            fnfResults[3],
-    "fnf — /text-to-image":     fnfResults[4],
-    "fnf — /infer":             fnfResults[5],
-    "fnf — /inference":         fnfResults[6],
-    "fnf — /run":               fnfResults[7],
-    "fnf — /predict":           fnfResults[8],
+    "platform — /nano_banana_pro":           platformResults[0],
+    "platform — /nano_banana_2":             platformResults[1],
+    "platform — /v1/nano_banana_pro":        platformResults[2],
+    "platform — /v1/image/generate":         platformResults[3],
+    "platform — /v1/generate":               platformResults[4],
+    "platform — /api/v1/generate":           platformResults[5],
+    "platform — /generate":                  platformResults[6],
+    "platform — /images/generate":           platformResults[7],
+    "mcp — Key auth":                        mcpKey,
+    "mcp — Bearer auth":                     mcpBearer,
   });
 }
