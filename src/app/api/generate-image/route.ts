@@ -30,26 +30,38 @@ interface GenParams {
 }
 
 async function submitViaAnthropicMCP(params: GenParams): Promise<string> {
+  const toolInput = { params };
+
   const response = await (client.beta.messages as Record<string, unknown> & {
-    create: (opts: unknown) => Promise<{ content: Array<{ type: string; text?: string }> }>;
+    create: (opts: unknown) => Promise<{ content: Array<{ type: string; text?: string; content?: unknown }>; stop_reason: string }>;
   }).create({
     model: "claude-haiku-4-5-20251001",
-    max_tokens: 512,
+    max_tokens: 2048,
     mcp_servers: [{
       type: "url",
       url: "https://mcp.higgsfield.ai/mcp",
       name: "higgsfield",
       authorization_token: `Key ${process.env.HIGGSFIELD_KEY_ID}:${process.env.HIGGSFIELD_KEY_SECRET}`,
     }],
-    system: 'Call generate_image immediately with the provided params. After the tool executes, output ONLY valid JSON: {"job_id":"<id from result>"}. No other text.',
+    system: "You are a tool executor. The user provides JSON input for generate_image. You MUST call generate_image with that EXACT input. Then output ONLY: {\"job_id\":\"<id>\"}",
     messages: [{
       role: "user",
-      content: `Generate image with these params: ${JSON.stringify(params)}`,
+      content: `Call generate_image with this input: ${JSON.stringify(toolInput)}`,
     }],
     betas: ["mcp-client-2025-04-04"],
   });
 
+  console.log("[generate-image] stop_reason:", response.stop_reason);
   console.log("[generate-image] response content:", JSON.stringify(response.content, null, 2));
+
+  // Extract from mcp_tool_result if present
+  for (const block of response.content ?? []) {
+    if (block.type === "mcp_tool_result") {
+      const raw = typeof block.content === "string" ? block.content : JSON.stringify(block.content);
+      const m = raw.match(/"?job_id"?\s*:?\s*"([a-zA-Z0-9_\-]+)"/);
+      if (m?.[1]) return m[1];
+    }
+  }
 
   const text = (response.content ?? [])
     .filter(b => b.type === "text")
