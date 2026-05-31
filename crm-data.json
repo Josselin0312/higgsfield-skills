@@ -1,0 +1,51 @@
+{
+  "metadata": {
+    "version": "1.0",
+    "created_at": "2026-05-31",
+    "currency": "USD"
+  },
+  "revenue": {
+    "total": 0,
+    "by_skill": {
+      "generate_image": 0,
+      "generate_video": 0,
+      "video_analysis": 0,
+      "virality_predictor": 0
+    },
+    "by_model": {}
+  },
+  "generations": {
+    "total": 0,
+    "image": 0,
+    "video": 0,
+    "analysis": 0
+  },
+  "credits": {
+    "total_spent": 0,
+    "average_per_generation": 0,
+    "by_model": {}
+  },
+  "history": [],
+  "models": {
+    "image": [
+      "nano_banana_2",
+      "nano_banana_flash",
+      "gpt_image_2",
+      "seedream_v4_5",
+      "seedream_v5_lite",
+      "cinematic_studio_2_5",
+      "marketing_studio_image"
+    ],
+    "video": [
+      "kling3_0",
+      "seedance_2_0",
+      "marketing_studio_video",
+      "higgsfield_preset",
+      "reframe"
+    ],
+    "analysis": [
+      "video_analysis",
+      "virality_predictor"
+    ]
+  }
+}
