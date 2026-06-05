@@ -163,6 +163,37 @@ export const SKILLS: Skill[] = [
       { id: "stade", label: "Stade dans le funnel", placeholder: "", type: "select", options: ["Premier contact", "Qualification", "Présentation offre", "Négociation", "Décision"] },
     ],
   },
+  {
+    id: "image-automation",
+    name: "Automatisation Image IA",
+    description: "Analyse une image et génère des prompts structurés pour les variations",
+    category: "visual",
+    icon: "🤖",
+    prompt: `Tu es expert en prompt engineering et analyse visuelle pour la génération d'images IA.
+
+    IMAGE DE RÉFÉRENCE : {image_url}
+    STYLES À GÉNÉRER : {styles}
+
+    Analyse l'image en détail et génère des prompts structurés pour chaque style.
+    Pour chaque style, tu dois :
+    1. Décrire précisément le contenu, la composition et l'ambiance de l'image actuelle
+    2. Adapter au style demandé tout en gardant la structure et l'essence
+    3. Mentionner les éléments visuels clés (couleurs, textures, éclairage, composition)
+    4. Rendre le prompt optimisé pour la génération d'images IA
+
+    Format de sortie (JSON) :
+    {{
+      "analysis": "Description détaillée de l'image analysée",
+      "prompts": [
+        {{"style": "...", "prompt": "...", "details": "..."}},
+        ...
+      ]
+    }}`,
+    inputs: [
+      { id: "image_url", label: "URL de l'image", placeholder: "ex: https://example.com/image.jpg", type: "text" },
+      { id: "styles", label: "Styles à générer", placeholder: "ex: minimal, professional, luxury, creative", type: "textarea" },
+    ],
+  },
 ];
 
 export const CATEGORY_LABELS: Record<SkillCategory, string> = {
